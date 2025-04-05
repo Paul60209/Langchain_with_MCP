@@ -563,7 +563,8 @@ async def handle_ppt_translation(olang: str, tlang: str):
         return f"錯誤：不支援的檔案格式。請上傳.ppt或.pptx檔案，而不是 '{file_name}'。"
     
     # 通知用戶處理中
-    await cl.Message(content=f"收到檔案 '{file_name}'，正在處理翻譯請求...").send()
+    processing_msg = cl.Message(content=f"收到檔案 '{file_name}'，正在處理翻譯請求...")
+    await processing_msg.send()
     
     try:
         # 讀取文件內容
@@ -616,20 +617,20 @@ async def handle_ppt_translation(olang: str, tlang: str):
                         with open(output_path, "wb") as f:
                             f.write(binary_content)
                         
-                        # 創建文件元素 - 修改：明確設置mime類型
+                        # 創建文件元素並包含在消息中發送
                         file_element = cl.File(
-                            name=translated_file_name, 
+                            name=translated_file_name,
                             path=output_path,
-                            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation" 
+                            display="inline"  # 使用內聯顯示
                         )
                         
-                        # 修改：先發送一個普通訊息
-                        await cl.Message(content=f"翻譯完成！以下是翻譯後的檔案：").send()
+                        # 使用元素列表發送消息
+                        await cl.Message(
+                            content="翻譯完成！以下是翻譯後的檔案：",
+                            elements=[file_element]
+                        ).send()
                         
-                        # 修改：單獨發送檔案元素
-                        await file_element.send(for_id=None)
-                        
-                        return f"翻譯完成！已為您提供檔案 '{translated_file_name}' 的下載連結。"
+                        return f"您可以點擊上方的檔案連結來下載翻譯好的文件 '{translated_file_name}'。"
                     else:
                         return f"翻譯錯誤：{result_dict.get('message', '未知錯誤')}"
                 except json.JSONDecodeError:
