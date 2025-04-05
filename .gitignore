@@ -1,0 +1,69 @@
+# 環境變數文件 - 包含敏感信息如API密鑰
+.env
+
+# Python 虛擬環境
+.venv/
+venv/
+ENV/
+
+# Python 緩存文件
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 日誌文件
+*.log
+
+# 本地配置文件
+instance/
+.webassets-cache
+
+# macOS 系統文件
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows 系統文件
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# 編輯器和IDE文件
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 輸出目錄
+output/
+
+# Chainlit 隱藏文件
+.chainlit/
+
+# 測試和臨時文件
+tmp/
+temp/
+.pytest_cache/
+.coverage
+htmlcov/ 
