@@ -10,6 +10,7 @@ from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain.callbacks.manager import CallbackManager
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from langchain.callbacks.base import BaseCallbackHandler
+from mcp_server_config import SERVER_CONFIGS # Import shared config
 
 import base64
 import tempfile
@@ -17,6 +18,7 @@ from copy import deepcopy
 from langchain_community.tools import tool
 from langchain_core.pydantic_v1 import BaseModel, Field
 import json
+import logging # Added missing import
 
 # load environment variables
 load_dotenv()
@@ -24,23 +26,7 @@ OPENAI_MODEL = os.getenv("MODEL", "gpt-4o-mini")
 
 
 # MCP server config.
-SERVER_CONFIGS = {
-    "weather": {
-        "path": os.path.join("MCP_Servers", "weather_server.py"),
-        "port": 8001,
-        "transport": "sse"
-    },
-    "sql_query": {
-        "path": os.path.join("MCP_Servers", "sql_query_server.py"),
-        "port": 8002,
-        "transport": "sse"
-    },
-    "ppt_translator": {
-        "path": os.path.join("MCP_Servers", "ppt_translator_server.py"),
-        "port": 8003,
-        "transport": "sse"
-    }
-}
+# SERVER_CONFIGS = { ... definition removed ... }
 
 async def create_mcp_client_with_retry(client_config, max_retries=3):
     """
@@ -83,13 +69,13 @@ async def create_mcp_client_with_retry(client_config, max_retries=3):
     
     return None, None
 
-# function to save server config to file (Currently not used)
-def save_server_config():
-    """Save server config to file"""
-    config_file = "server_config.txt"
-    with open(config_file, "w") as f:
-        for name, config in SERVER_CONFIGS.items():
-            f.write(f"{name}:{config['port']}:{config['transport']}\n")
+# # function to save server config to file (Currently not used)
+# def save_server_config():
+#     """Save server config to file"""
+#     config_file = "server_config.txt"
+#     with open(config_file, "w") as f:
+#         for name, config in SERVER_CONFIGS.items():
+#             f.write(f"{name}:{config['port']}:{config['transport']}\n")
 
 # function to load server config from file
 def load_server_config():
@@ -208,6 +194,79 @@ async def on_chat_start():
         memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
         
         # System Message: The general/static part of the prompt, it's LLM's guideline.
+        # system_message = """
+        # You are a powerful AI assistant capable of using various professional tools to help users solve problems.
+        # Your HIGHEST PRIORITY is to respond in the EXACT same language used by the user in their last message. This overrides any other language considerations.
+
+        # Tool Types and Usage Scenarios:
+
+        # 1. 【Weather Query Tool】
+        # - Tool Name: "get_weather" or any tool name containing "weather"
+        # - Usage Scenario: Any questions related to weather, temperature, humidity, or weather forecasts
+        # - Input Format: {{"city": "City Name"}}
+        # - Input Example: {{"city": "Taipei"}}, {{"city": "Tokyo"}}, {{"city": "New York"}}
+        # - Trigger Words: "weather", "temperature", "humidity", "forecast", "rain"
+        # - Example Questions: "How is the weather in Taipei today?", "Will it rain tomorrow?", "What is the temperature in Tokyo?"
+
+        # 2. 【Database Query Tool】
+        # - Tool Name: "query_database" or any tool name containing "sql", "query", "database"
+        # - Usage Scenario: Any questions requiring data queries, statistics, or table content inspection
+        # - Input Format: {{"query": "SQL Query Statement"}}
+        # - Input Example: {{"query": "SELECT * FROM sales LIMIT 5"}}
+        # - Trigger Words: "data", "statistics", "sales", "how many", "query", "database", "table"
+        # - Example Questions: "Query recent sales data", "What products are available?", "How many apples were sold?", "What is the best-selling product?"
+        # - Database Schema:
+        #     The database is including 'sales' table, with the following columns:
+        #     - ID (VARCHAR): Sale record ID
+        #     - Date (DATE): Sale date
+        #     - Region (VARCHAR): Region, including: 関東, 関西
+        #     - City (VARCHAR): City, including: 東京, 横浜, 埼玉, 千葉, 京都, 大阪, 神戸
+        #     - Category (VARCHAR): Category, including: 野菜, 果物
+        #     - Product (VARCHAR): Product name, including: キャベツ, 玉ねぎ, トマト, リンゴ, みかん, バナナ
+        #     - Quantity (INT): Quantity
+        #     - Unit_Price (DECIMAL): Unit price
+        #     - Total_Price (DECIMAL): Total price
+
+        # 3. 【File Upload Translation Tool】
+        # - Tool Name: "upload_and_translate_ppt"
+        # - Usage Scenario: All requests requiring users to upload a local PowerPoint file for translation
+        # - Input Format: {{"olang": "Original Language", "tlang": "Target Language"}}
+        # - Input Example: {{"olang": "English", "tlang": "Chinese"}}
+        # - Mandatory Trigger Conditions: When the user mentions any of the following keywords, this tool MUST be called instead of just replying with text:
+        #     - "translate PPT", "translate presentation", "translate PowerPoint", "PPT translation", "presentation translation"
+        #     - "translate the PPT", "translate the presentation", "help me translate PPT", "help me translate presentation"
+        #     - "PPT from X to Y", "presentation from X to Y" (where X and Y are any languages)
+        # - Note: When using this tool, the system will automatically prompt the user to upload the PPT file; do not send a separate text message requesting the upload.
+        # - Example Request: "Help me translate the ppt from English to Chinese" - In this case, call the tool directly with parameters {{"olang": "English", "tlang": "Chinese"}}
+
+        # 4. 【Server-Side Translation Tool】
+        # - Tool Name: "translate_ppt"
+        # - Usage Scenario: User needs to translate a PowerPoint file that already exists on the server
+        # - Input Format: {{"olang": "Original Language", "tlang": "Target Language", "file_path": "File Path"}}
+        # - Input Example: {{"olang": "English", "tlang": "Chinese", "file_path": "/path/to/file.pptx"}}
+        # - Example Questions: "Translate the PPT file on the server", "Convert the existing presentation"
+
+        # Important Principles:
+        # 1. Tool Selection: Carefully analyze the user's question to determine the most appropriate tool type.
+        # 2. Language Response: Respond EXCLUSIVELY in the language used by the user in their most recent input. **This is the MOST IMPORTANT rule.** If tools return data in a different language, you MUST translate it to the user's language before formulating the response.
+        # 3. No Guessing: For questions requiring data, the appropriate tool must be used; do not guess.
+        # 4. JSON Format: All tool inputs must be in JSON format, not plain text strings.
+        # 5. Choose the Correct PPT Translation Tool: Use upload_and_translate_ppt when the user needs to translate a local file; use translate_ppt when processing a file already on the server.
+        # 6. Mandatory Tool Use: For requests mentioning "translate PPT", "translate presentation", etc., the tool must be used instead of just replying with text.
+
+        # Decision Flow:
+        # 1. Analyze the user's question: Is it about weather? Data query? PPT translation?
+        # 2. Select the corresponding tool category.
+        # 3. Construct the input in the correct format.
+        # 4. Execute the tool and return the result.
+        # 5. **CRITICAL STEP:** Translate the tool's output to the user's language if necessary.
+        # 6. Formulate the final response in the user's language.
+
+        # Special Reminder:
+        # - For PPT translation requests, replying only with text without calling the tool is incorrect behavior.
+        # - The correct approach is to analyze the language information in the user's request (e.g., from English to Chinese) and then immediately call the upload_and_translate_ppt tool.
+        # - The upload_and_translate_ppt tool will automatically handle the subsequent file upload process; no additional prompts are needed.
+        # """
         system_message = """
         You are a powerful AI assistant capable of using various professional tools to help users solve problems.
 
@@ -220,6 +279,7 @@ async def on_chat_start():
         - Input Example: {{"city": "Taipei"}}, {{"city": "Tokyo"}}, {{"city": "New York"}}
         - Trigger Words: "weather", "temperature", "humidity", "forecast", "rain"
         - Example Questions: "How is the weather in Taipei today?", "Will it rain tomorrow?", "What is the temperature in Tokyo?"
+        - You MUST answer in the language used by the user.
 
         2. 【Database Query Tool】
         - Tool Name: "query_database" or any tool name containing "sql", "query", "database"
@@ -239,6 +299,7 @@ async def on_chat_start():
             - Quantity (INT): Quantity
             - Unit_Price (DECIMAL): Unit price
             - Total_Price (DECIMAL): Total price
+        - You MUST answer in the language used by the user.
 
         3. 【File Upload Translation Tool】
         - Tool Name: "upload_and_translate_ppt"
@@ -258,6 +319,7 @@ async def on_chat_start():
         - Input Format: {{"olang": "Original Language", "tlang": "Target Language", "file_path": "File Path"}}
         - Input Example: {{"olang": "English", "tlang": "Chinese", "file_path": "/path/to/file.pptx"}}
         - Example Questions: "Translate the PPT file on the server", "Convert the existing presentation"
+        - You MUST answer in the language used by the user.
 
         Important Principles:
         1. Tool Selection: Carefully analyze the user's question to determine the most appropriate tool type.
@@ -277,6 +339,7 @@ async def on_chat_start():
         - For PPT translation requests, replying only with text without calling the tool is incorrect behavior.
         - The correct approach is to analyze the language information in the user's request (e.g., from English to Chinese) and then immediately call the upload_and_translate_ppt tool.
         - The upload_and_translate_ppt tool will automatically handle the subsequent file upload process; no additional prompts are needed.
+        - You MUST answer in the language used by the user.
         """
         
         # prompt: The ReAct style prompt template. 
@@ -286,7 +349,25 @@ async def on_chat_start():
             MessagesPlaceholder(variable_name="chat_history"),
             ("human", "{input}"),
             ("system", 
-             """
+            #  """
+            # When the user requests PPT translation, the upload_and_translate_ppt tool MUST be used immediately, and not reply with a pure text message.
+            # Please process the user's question using the following format:
+            # Think:
+            # 1. Analyze the user's question.
+            # 2. Identify the language of the user's last message. Let's call it `user_language`.
+            # 3. Determine which tool, if any, is needed to answer the question.
+            # 4. If a tool is used, you MUST translate its output to `user_language`.
+            # For requests related to PPT translation, the upload_and_translate_ppt tool MUST be used, this tool will automatically handle the file upload and subsequent process. Do not ask the user to upload the file in the 'Think' step.
+            # Action: Select the tool and use the appropriate JSON input parameters. If no tool is needed, proceed directly to Final Response.
+            # Observation: Check the result returned by the tool. Note the language of the result.
+            # Action: If necessary, use another tool following the same thinking process (including language check and translation plan).
+            # Observation: Check the result returned by the new tool. Note the language.
+            # Final response:
+            # 1. **Translate ALL necessary information gathered from tools into `user_language`.**
+            # 2. Summarize all information and provide a complete response.
+            # 3. **The final response MUST be EXCLUSIVELY in `user_language`.**
+            # """
+            """
             When the user requests PPT translation, the upload_and_translate_ppt tool MUST be used immediately, and not reply with a pure text message.
             Please process the user's question using the following format:
             Think: Analyze the user's question, determine which tool to use. Do not write out specific answers, but judge which tool to use to get information.
@@ -295,8 +376,9 @@ async def on_chat_start():
             Observation: Check the result returned by the tool.
             Action: May need to use another tool.
             Observation: Check the result returned by the new tool.
-            Final response: Summarize all information and provide a complete response. Please answer in the language used by the user.
+            Final response: Summarize all information and provide a complete response.
             """
+  
             ),
             MessagesPlaceholder(variable_name="agent_scratchpad")
         ])
@@ -382,22 +464,6 @@ async def on_message(message: cl.Message):
         
         # get the final output
         output = result.get("output", "No response")
-        
-        # # record the intermediate steps
-        # if "intermediate_steps" in result:
-        #     print("\nIntermediate steps details:")
-        #     for i, step in enumerate(result["intermediate_steps"]):
-        #         print(f"   Step {i+1}:")
-        #         action = step[0]
-        #         observation = step[1]
-        #         print(f"     Tool: {getattr(action, 'tool', 'unknown')}")
-        #         print(f"     Tool type: {type(action).__name__}")
-        #         print(f"     Input: {getattr(action, 'tool_input', 'unknown')}")
-        #         print(f"     Input type: {type(getattr(action, 'tool_input', None)).__name__}")
-        #         print(f"     Result: {observation[:100]}..." if len(str(observation)) > 100 else f"     Result: {observation}")
-                
-        # else:
-        #     print("Warning: No intermediate steps information")
         
         # display the AI response on console
         print(f"\n[AI final response]\n{output}\n")
