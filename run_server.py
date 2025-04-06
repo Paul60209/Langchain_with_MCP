@@ -6,25 +6,7 @@ import threading
 import sys
 import socket
 import psutil
-
-# MCP Server Configurations
-SERVER_CONFIGS = {
-    "weather": {
-        "path": os.path.join("MCP_Servers", "weather_server.py"),
-        "port": 8001,
-        "transport": "sse"
-    },
-    "sql_query": {
-        "path": os.path.join("MCP_Servers", "sql_query_server.py"),
-        "port": 8002,
-        "transport": "sse"
-    },
-    "ppt_translator": {
-        "path": os.path.join("MCP_Servers", "ppt_translator_server.py"),
-        "port": 8003,
-        "transport": "sse"
-    }
-}
+from mcp_server_config import SERVER_CONFIGS # Import shared config
 
 # Store server processes
 server_processes = {}
@@ -59,56 +41,74 @@ def check_and_kill_process_on_port(port):
     """Check if the specified port is occupied, and if so, attempt to terminate the occupying process."""
     try:
         # Create a socket to try binding the port
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(1)
-        result = sock.connect_ex(('127.0.0.1', port))
-        sock.close()
+        # Use a context manager for the socket
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(1)
+            result = sock.connect_ex(('127.0.0.1', port))
+            # No need to explicitly close with context manager
         
         # If the port is available (connection failed), return
         if result != 0:
-            print(f"Port {port} is available.")
+            # print(f"Port {port} is available.") # Reduce verbosity
             return True
         
         print(f"Port {port} is occupied, attempting to terminate the occupying process...")
         
-        # Find the process occupying the port
+        # Find the process occupying the port using net_connections
+        process_found = False
         for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
             try:
-                for conn in proc.connections(kind='inet'):
+                # Use net_connections instead of connections
+                for conn in proc.net_connections(kind='inet'):
                     if conn.laddr.port == port:
+                        process_found = True
                         print(f"Found process occupying port {port}: PID={proc.pid}, Name={proc.name()}")
                         
                         # Terminate the process
+                        print(f"Sending termination signal (SIGTERM) to process {proc.pid}")
                         proc.terminate()
-                        print(f"Sent termination signal to process {proc.pid}")
                         
                         # Wait for the process to terminate (max 5 seconds)
-                        proc.wait(5)
-                        print(f"Process {proc.pid} has terminated")
+                        try:
+                            proc.wait(5)
+                            print(f"Process {proc.pid} terminated successfully after SIGTERM.")
+                        except psutil.TimeoutExpired:
+                            print(f"Process {proc.pid} did not terminate after SIGTERM, attempting SIGKILL...")
+                            proc.kill()  # Force kill
+                            # Remove the wait after kill as it might timeout unnecessarily
+                            # proc.wait(1) # Wait briefly for OS to process kill
+                            print(f"Process {proc.pid} sent SIGKILL signal.")
                         
+                        # Brief pause to allow OS to potentially release the port after kill
+                        time.sleep(0.5)
+
                         # Check again if the port is available
-                        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                        sock.settimeout(1)
-                        result = sock.connect_ex(('127.0.0.1', port))
-                        sock.close()
+                        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock_check:
+                            sock_check.settimeout(1)
+                            result_check = sock_check.connect_ex(('127.0.0.1', port))
                         
-                        if result != 0:
+                        if result_check != 0:
                             print(f"Port {port} is now available.")
                             return True
                         else:
-                            print(f"Port {port} is still occupied, attempting to force kill the process...")
-                            proc.kill()  # Force kill
-                            time.sleep(1)  # Wait for the OS to release the port
-                            return check_and_kill_process_on_port(port)  # Recursive check
+                            print(f"Warning: Port {port} still occupied after attempting termination.")
+                            return False # Port is still occupied
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                pass
-        
-        # If no specific process found but port is still occupied
-        print(f"Could not find the specific process occupying port {port}.")
-        return False
+                continue # Ignore processes we can't access or that died
+            except Exception as e:
+                # Log other potential errors during iteration
+                print(f"Error checking connections for process {proc.pid}: {e}")
+                continue
+
+        # If loop completes and process was found but port still occupied (or never found but occupied)
+        if process_found:
+             print(f"Could not free up port {port} although process was targeted.")
+        else:
+            print(f"Port {port} is occupied, but could not find the specific process.")
+        return False # Port remains occupied
     
     except Exception as e:
-        print(f"Error checking port {port}: {e}")
+        print(f"Error during check_and_kill_process_on_port for port {port}: {e}")
         return False
 
 def ensure_ports_available():
@@ -125,8 +125,21 @@ def ensure_ports_available():
 
 def start_server(name, config):
     """Start an MCP server and return the process."""
+    port = config["port"]
+    
+    # Final check before starting
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(0.5) # Quick check
+            if sock.connect_ex(('127.0.0.1', port)) == 0:
+                print(f"Error starting {name}: Port {port} is still occupied just before launch.")
+                return None
+    except Exception as e:
+         print(f"Error during final port check for {name} on port {port}: {e}")
+         return None
+
     # Use the port specified in the config
-    cmd = ["python", config["path"], "--port", str(config["port"])]
+    cmd = ["python", config["path"], "--port", str(port)]
     print(f"Starting server: {name} - {' '.join(cmd)}")
     
     # Start the process

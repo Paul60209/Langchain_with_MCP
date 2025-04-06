@@ -34,7 +34,7 @@ async def fetch_weather(city: str) -> dict[str, Any] | None:
         "q": city,
         "appid": API_KEY,
         "units": "metric",
-        "lang": "zh_cn" # Language for description, can be changed e.g., to 'en'
+        "lang": "en" # Language for description, changed from zh_cn to en
     }
     headers = {"User-Agent": USER_AGENT}
 
@@ -111,9 +111,6 @@ async def query_weather(city: str) -> str:
     """
     data = await fetch_weather(city)
     return format_weather(data)
-
-# # Mount MCP server to FastAPI application
-# app.mount("/mcp", sse_app(mcp))
 
 if __name__ == "__main__":
     import uvicorn
