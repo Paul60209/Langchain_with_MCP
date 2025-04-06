@@ -1,10 +1,10 @@
-import json
+# import json
 import os
 import pymysql
 import dotenv
 import argparse
 from typing import Any, Dict, List
-from fastapi import FastAPI
+# from fastapi import FastAPI
 from mcp.server.fastmcp import FastMCP
 import pathlib
 
@@ -23,11 +23,11 @@ print(f"嘗試載入環境變數檔案: {env_path}")
 dotenv.load_dotenv(dotenv_path=env_path)
 
 # 列印所有環境變數以進行偵錯
-print(f"環境變數 CLEARDB_DATABASE_URL: {os.getenv('CLEARDB_DATABASE_URL', '未設定')}")
-print(f"環境變數 OPENWEATHER_API_KEY: {os.getenv('OPENWEATHER_API_KEY', '未設定')}")  # 用於比較
+
+
 
 # 創建 FastAPI 應用
-app = FastAPI()
+# app = FastAPI()
 
 # 初始化 MCP 伺服器
 mcp = FastMCP("SQLQueryServer")
@@ -282,19 +282,12 @@ if __name__ == "__main__":
                 mcp._mcp_server.create_initialization_options()
             )
     
-    # 定義健康檢查端點
-    async def health_check(request):
-        from starlette.responses import JSONResponse
-        return JSONResponse({"status": "ok"})
-    
     # 創建 Starlette 應用
     starlette_app = Starlette(
         routes=[
             # SSE 端點
             Route("/sse", endpoint=handle_sse, methods=["GET"]),
-            Mount("/mcp/", app=sse.handle_post_message),
-            # 添加健康檢查端點
-            Route("/health", endpoint=health_check, methods=["GET"]),
+            Mount("/mcp/", app=sse.handle_post_message)
         ]
     )
     

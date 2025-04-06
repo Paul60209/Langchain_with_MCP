@@ -4,7 +4,6 @@ import os
 import dotenv
 import argparse
 from typing import Any
-from fastapi import FastAPI
 from mcp.server.fastmcp import FastMCP
 
 # from mcp.server.sse import sse_app
@@ -20,7 +19,7 @@ os.environ["MCP_SSE_PORT"] = str(args.port)
 dotenv.load_dotenv()
 
 # 創建 FastAPI 應用
-app = FastAPI()
+# app = FastAPI()
 
 # 初始化 MCP 服务器
 mcp = FastMCP("WeatherServer")
@@ -84,7 +83,7 @@ def format_weather(data: dict[str, Any] | str) -> str:
     return (
         f"🌍 {city}, {country}\n"
         f"🌡 溫度: {temp}°C\n"
-        f"💧 濕度: {humidity}%\n"
+        f"�� 濕度: {humidity}%\n"
         f"🌬 風速: {wind_speed} m/s\n"
         f"🌤 天氣: {description}\n"
     )
@@ -144,19 +143,12 @@ if __name__ == "__main__":
                 mcp._mcp_server.create_initialization_options()
             )
     
-    # 定義健康檢查端點
-    async def health_check(request):
-        from starlette.responses import JSONResponse
-        return JSONResponse({"status": "ok"})
-    
     # 創建 Starlette 應用
     starlette_app = Starlette(
         routes=[
             # 確保 /sse 端點能夠正確處理 GET 請求
             Route("/sse", endpoint=handle_sse, methods=["GET"]),
-            Mount("/mcp/", app=sse.handle_post_message),
-            # 添加健康檢查端點
-            Route("/health", endpoint=health_check, methods=["GET"]),
+            Mount("/mcp/", app=sse.handle_post_message)
         ]
     )
     

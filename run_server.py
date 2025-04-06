@@ -1,5 +1,4 @@
 import os
-import asyncio
 import subprocess
 import time
 import signal
@@ -55,7 +54,6 @@ def read_process_output(process, name, output_type):
             if log_key not in server_logs:
                 server_logs[log_key] = []
             server_logs[log_key].append(line_str)
-            print(f"[{name}] [{output_type}] {line_str}")
 
 def check_and_kill_process_on_port(port):
     """檢查指定端口是否被佔用，如果被佔用則嘗試終止佔用該端口的進程"""
@@ -167,8 +165,10 @@ def start_server(name, config):
 def stop_server(name):
     """停止指定的 MCP 伺服器"""
     process = server_processes.get(name)
+    stopped_process = None
     if process and process.poll() is None:  # 進程仍在運行
         print(f"停止伺服器: {name}")
+        stopped_process = process
         try:
             process.terminate()  # 發送 SIGTERM
             for _ in range(50):  # 等待最多 5 秒
@@ -183,16 +183,37 @@ def stop_server(name):
         finally:
             if name in server_processes:
                 del server_processes[name]
+    return stopped_process
 
 def stop_all_servers():
     """停止所有正在運行的 MCP 伺服器"""
     global is_stopping
     is_stopping = True
-    
+
+    print("\n正在嘗試停止所有伺服器...")
+    processes_to_wait = []
     for name in list(server_processes.keys()):
-        stop_server(name)
-    
-    print("所有伺服器已停止")
+        process = stop_server(name)
+        if process:
+            processes_to_wait.append((name, process))
+
+    # 等待所有被要求停止的進程結束
+    if processes_to_wait:
+        print("等待伺服器進程完全終止...")
+        for name, process in processes_to_wait:
+            try:
+                # 檢查進程是否仍在運行才等待
+                if process.poll() is None:
+                    process.wait(timeout=5)
+                    print(f"伺服器 {name} 已確認終止。")
+                else:
+                    print(f"伺服器 {name} 在檢查時已停止。")
+            except subprocess.TimeoutExpired:
+                print(f"警告: 伺服器 {name} 在等待超時後仍未終止。可能需要手動檢查。")
+            except Exception as e:
+                 print(f"等待伺服器 {name} 終止時出錯: {e}")
+
+    print("所有伺服器停止流程完成。")
 
 def save_server_config():
     """將伺服器配置保存到文件"""
@@ -249,29 +270,31 @@ def start_all_servers():
     print("\n所有 MCP 伺服器已啟動完成。按 Ctrl+C 停止所有伺服器。")
     print("客戶端可以使用這些伺服器進行連接，並在不停止伺服器的情況下啟動或關閉。")
 
-# 註冊程序終止處理函數
+# Restore original signal handler
 def signal_handler(sig, frame):
-    print("\n接收到終止信號，正在關閉所有伺服器...")
+    print(f"\n接收到信號 {sig}, 正在關閉所有伺服器...")
     stop_all_servers()
     print("伺服器已安全停止。")
     sys.exit(0)
 
 if __name__ == "__main__":
-    # 註冊信號處理器
+    # Register signal handlers
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
-    
+
     try:
-        # 啟動所有伺服器
+        # Start all servers
         start_all_servers()
-        
-        # 保持主線程運行
+
+        # Keep main thread running indefinitely until signal
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        print("\n接收到鍵盤中斷，正在關閉所有伺服器...")
+        # This block might not be strictly necessary anymore if signals are handled,
+        # but kept for robustness in case signal handler somehow fails.
+        print("\n接收到鍵盤中斷(備用處理)，正在關閉所有伺服器...")
         stop_all_servers()
-        print("伺服器已安全停止。")
+        print("伺服器已安全停止(備用處理)。")
     except Exception as e:
-        print(f"發生錯誤: {e}")
-        stop_all_servers() 
+        print(f"\n主程序發生未處理錯誤: {e}")
+        stop_all_servers() # Attempt cleanup on other errors too 
