@@ -24,14 +24,13 @@ import json
 from langchain_openai import ChatOpenAI
 
 # 引入 MCP 相關模組
-from mcp.server.fastmcp import FastMCP, Image
+from mcp.server.fastmcp import FastMCP
 
 # 最後再引入 python-pptx 相關模組
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
-from pptx.enum.dml import MSO_THEME_COLOR_INDEX, MSO_COLOR_TYPE
+from pptx.enum.dml import MSO_THEME_COLOR_INDEX
 from pptx.dml.color import RGBColor
-from pptx.util import Pt
 
 # 載入環境變數
 dotenv.load_dotenv()
@@ -254,35 +253,35 @@ async def translate_shape(shape, olang: str, tlang: str, ctx=None) -> None:
     try:
         # 處理群組形狀
         if shape.shape_type == MSO_SHAPE_TYPE.GROUP:
-            print(f"[信息] 檢測到群組形狀，進行遞歸處理")
+            
             await translate_group_shape(shape, olang, tlang, ctx)
             return
             
         # 檢查形狀是否包含文本框
         if not hasattr(shape, "text_frame"):
-            print(f"[信息] 跳過不含文本框的形狀")
+            
             return
             
         text_frame = shape.text_frame
         if not text_frame.text.strip():
-            print(f"[信息] 跳過空文本框")
+            
             return
             
-        print(f"\n===== 處理形狀文本 =====")
-        print(f"[信息] 形狀文本預覽: {text_frame.text[:50] + '...' if len(text_frame.text) > 50 else text_frame.text}")
+        
+        
         
         # 保存文本框格式
         text_frame_props = get_text_frame_properties(text_frame)
         
         # 遍歷所有段落
         paragraph_count = len(text_frame.paragraphs)
-        print(f"[信息] 段落數量: {paragraph_count}")
+        
         
         for i, paragraph in enumerate(text_frame.paragraphs, 1):
             # 保存段落格式
             para_props = get_paragraph_properties(paragraph)
             
-            print(f"[信息] 處理第 {i}/{paragraph_count} 段落")
+            
             
             # 遍歷所有文本運行
             runs_data = []
@@ -292,7 +291,7 @@ async def translate_shape(shape, olang: str, tlang: str, ctx=None) -> None:
                 # 保存運行格式和文本
                 run_props = get_run_properties(run)
                 original_text = run.text
-                print(f"[信息] 處理第 {j}/{run_count} 運行文本: {original_text[:30] + '...' if len(original_text) > 30 else original_text}")
+                
                 
                 if original_text.strip():
                     # 使用 ChatGPT 進行翻譯
@@ -317,7 +316,7 @@ async def translate_shape(shape, olang: str, tlang: str, ctx=None) -> None:
         
         # 恢復文本框格式
         apply_text_frame_properties(text_frame, text_frame_props)
-        print(f"===== 形狀文本處理完成 =====\n")
+        
         
     except Exception as e:
         print(f"[錯誤] 翻譯形狀時發生錯誤: {str(e)}")
@@ -341,15 +340,15 @@ async def translate_ppt_file(file_path: str, olang: str, tlang: str, ctx=None) -
         print("\n========== PowerPoint 翻譯過程 ==========")
         # 1. 建立輸出目錄
         os.makedirs(OUTPUT_PATH, exist_ok=True)
-        print(f"[信息] 輸出目錄: {os.path.abspath(OUTPUT_PATH)}")
+        
         
         # 2. 準備輸出文件路徑
         file_name = os.path.basename(file_path)
         name, ext = os.path.splitext(file_name)
         output_file = f'translated_{name}{ext}'
         output_path = os.path.join(OUTPUT_PATH, output_file)
-        print(f"[信息] 輸入文件: {file_path}")
-        print(f"[信息] 輸出文件: {output_path}")
+        
+        
         
         # 3. 載入 PowerPoint
         print(f"[信息] 開始 PowerPoint 翻譯...")
@@ -358,10 +357,10 @@ async def translate_ppt_file(file_path: str, olang: str, tlang: str, ctx=None) -
         if ctx:
             await ctx.info(f"開始翻譯...\n從 {olang} 到 {tlang}")
         
-        print(f"[信息] 載入 PowerPoint 文件...")
+        
         presentation = Presentation(file_path)
         total_slides = len(presentation.slides)
-        print(f"[信息] 檢測到 {total_slides} 張投影片")
+        
         
         # 4. 翻譯每個投影片
         for index, slide in enumerate(presentation.slides, 1):
@@ -370,7 +369,7 @@ async def translate_ppt_file(file_path: str, olang: str, tlang: str, ctx=None) -
             
             # 計數投影片中的形狀數量
             shape_count = len(slide.shapes)
-            print(f"[信息] 投影片 {index} 包含 {shape_count} 個形狀")
+            
             
             if ctx:
                 await ctx.info(progress_msg)
@@ -379,11 +378,11 @@ async def translate_ppt_file(file_path: str, olang: str, tlang: str, ctx=None) -
             
             # 翻譯投影片中的每個形狀
             for shape_idx, shape in enumerate(slide.shapes, 1):
-                print(f"[信息] 處理投影片 {index}, 形狀 {shape_idx}/{shape_count}")
+                
                 await translate_shape(shape, olang, tlang, ctx)
         
         # 5. 儲存翻譯後的文件
-        print("\n[信息] 儲存翻譯後的文件...")
+        
         if ctx:
             await ctx.info("翻譯完成，生成文件中...")
             await ctx.report_progress(total_slides, total_slides)  # 100% 完成
@@ -438,7 +437,7 @@ async def translate_ppt(olang: str, tlang: str, file_content: str = None, file_n
     # 獲取 MCP 上下文
     try:
         ctx = mcp.get_current_request_context()
-        print(f"[信息] 成功獲取 MCP 上下文")
+        
     except Exception as e:
         print(f"[警告] 無法獲取 MCP 上下文: {str(e)}")
         ctx = None
@@ -447,8 +446,8 @@ async def translate_ppt(olang: str, tlang: str, file_content: str = None, file_n
         print(f"\n========== PPT翻譯工具啟動 ==========")
         print(f"[參數] 來源語言: {olang}")
         print(f"[參數] 目標語言: {tlang}")
-        print(f"[參數] 檔案名稱: {file_name if file_name else '未指定'}")
-        print(f"[參數] 文件內容長度: {len(file_content) if file_content else 0} 字符")
+        
+        
         
         # 檢查必要參數
         if not file_content:
@@ -461,35 +460,35 @@ async def translate_ppt(olang: str, tlang: str, file_content: str = None, file_n
         # 確保檔案名稱有效
         if not file_name:
             file_name = "uploaded_presentation.pptx"
-            print(f"[信息] 未提供檔案名稱，使用預設名稱: {file_name}")
+            
         elif not (file_name.lower().endswith('.ppt') or file_name.lower().endswith('.pptx')):
             old_name = file_name
             file_name += ".pptx"  # 添加預設副檔名
-            print(f"[信息] 檔案名稱 '{old_name}' 沒有有效副檔名，修改為: {file_name}")
-        else:
-            print(f"[信息] 使用提供的檔案名稱: {file_name}")
+            
+        
+            
         
         # 建立臨時檔案來存儲上傳的內容
-        print(f"[信息] 創建臨時文件...")
+        
         with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file_name)[1]) as temp_file:
             # 直接寫入檔案內容
             try:
                 if isinstance(file_content, bytes):
-                    print(f"[信息] 檢測到二進制文件內容")
+                    
                     temp_file.write(file_content)
                 elif isinstance(file_content, str):
-                    print(f"[信息] 檢測到字符串文件內容，嘗試Base64解碼")
+                    
                     # 嘗試解碼 base64 字串
                     try:
                         decoded_content = base64.b64decode(file_content)
                         temp_file.write(decoded_content)
-                        print(f"[信息] Base64解碼成功，寫入 {len(decoded_content)} 字節")
+                        
                     except Exception as e:
                         print(f"[警告] Base64解碼失敗: {str(e)}，嘗試寫入純文本")
                         # 如果不是有效的base64，視為純文本
                         encoded_content = file_content.encode('utf-8')
                         temp_file.write(encoded_content)
-                        print(f"[信息] 寫入 {len(encoded_content)} 字節的純文本")
+                        
                 else:
                     print(f"[錯誤] 不支援的文件內容類型: {type(file_content)}")
                     return json.dumps({
@@ -498,7 +497,7 @@ async def translate_ppt(olang: str, tlang: str, file_content: str = None, file_n
                     })
                 
                 temp_file_path = temp_file.name
-                print(f"[信息] 檔案已暫存於: {temp_file_path}")
+                
             except Exception as e:
                 print(f"[錯誤] 處理檔案內容時發生錯誤: {str(e)}")
                 return json.dumps({
@@ -514,27 +513,27 @@ async def translate_ppt(olang: str, tlang: str, file_content: str = None, file_n
         # 清理臨時檔案
         if os.path.exists(temp_file_path):
             os.remove(temp_file_path)
-            print(f"[信息] 已清理臨時檔案: {temp_file_path}")
+            
         
         # 讀取翻譯後的文件並編碼為base64
         with open(output_path, "rb") as f:
             file_bytes = f.read()
-            print(f"[信息] 讀取翻譯後的文件: {len(file_bytes)} 字節")
+            
             translated_file_content = base64.b64encode(file_bytes).decode('utf-8')
-            print(f"[信息] 編碼為Base64: {len(translated_file_content)} 字符")
+            
         
         # 獲取輸出文件名
         output_file_name = os.path.basename(output_path)
         
         # 返回包含必要訊息的 JSON
-        print(f"[信息] 準備返回結果 JSON")
+        
         result_json = json.dumps({
             "success": True,
             "message": "翻譯完成！",
             "file_name": output_file_name,
             "file_content": translated_file_content
         })
-        print(f"[信息] 結果 JSON 長度: {len(result_json)} 字符")
+        
         print(f"========== PPT翻譯工具完成 ==========\n")
         return result_json
         
@@ -610,19 +609,12 @@ if __name__ == "__main__":
                 mcp._mcp_server.create_initialization_options()
             )
     
-    # 定義健康檢查端點
-    async def health_check(request):
-        from starlette.responses import JSONResponse
-        return JSONResponse({"status": "ok"})
-    
     # 創建 Starlette 應用
     starlette_app = Starlette(
         routes=[
             # SSE 端點
             Route("/sse", endpoint=handle_sse, methods=["GET"]),
-            Mount("/mcp/", app=sse.handle_post_message),
-            # 添加健康檢查端點
-            Route("/health", endpoint=health_check, methods=["GET"]),
+            Mount("/mcp/", app=sse.handle_post_message)
         ]
     )
     

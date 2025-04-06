@@ -1,34 +1,28 @@
 import os
 import asyncio
-import subprocess
-import time
-import signal
 import httpx
-import threading
 import chainlit as cl
-from chainlit.element import Element
-from chainlit.sync import run_sync
-from langchain.agents import AgentExecutor, create_react_agent, create_openai_tools_agent
+from langchain.agents import AgentExecutor, create_openai_tools_agent #, create_react_agent
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.memory import ConversationBufferMemory
 from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
 from langchain_mcp_adapters.client import MultiServerMCPClient
-from langchain_core.prompts import PromptTemplate
-from langchain.agents.output_parsers import ReActJsonSingleInputOutputParser
 from langchain.callbacks.manager import CallbackManager
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from langchain.callbacks.base import BaseCallbackHandler
+
 import base64
 import tempfile
 from copy import deepcopy
-import logging
 from langchain_community.tools import tool
 from langchain_core.pydantic_v1 import BaseModel, Field
 import json
 
 # 加載環境變量
 load_dotenv()
+OPENAI_MODEL = os.getenv("MODEL", "gpt-4o-mini")
+
 
 # MCP 伺服器配置
 SERVER_CONFIGS = {
@@ -51,33 +45,6 @@ SERVER_CONFIGS = {
 
 # 配置 OpenAI 模型
 OPENAI_MODEL = os.getenv("MODEL", "gpt-4o-mini")
-
-async def check_server_health(url, retries=5, delay=2):
-    """
-    檢查伺服器健康狀態
-    
-    Args:
-        url: 伺服器 URL
-        retries: 重試次數
-        delay: 每次重試之間的延遲（秒）
-        
-    Returns:
-        bool: 伺服器是否健康
-    """
-    for attempt in range(retries):
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(url, timeout=5.0)
-                # 只要伺服器返回任何響應，就認為是健康的
-                print(f"健康檢查響應: {url} - 狀態碼: {response.status_code}")
-                return True  # 如果能夠得到響應，就認為伺服器是健康的
-        except Exception as e:
-            print(f"健康檢查失敗 (嘗試 {attempt+1}/{retries}): {e}")
-        
-        if attempt < retries - 1:  # 如果不是最後一次嘗試
-            await asyncio.sleep(delay)  # 等待一段時間再重試
-    
-    return False
 
 async def create_mcp_client_with_retry(client_config, max_retries=3):
     """
@@ -127,7 +94,6 @@ def save_server_config():
     with open(config_file, "w") as f:
         for name, config in SERVER_CONFIGS.items():
             f.write(f"{name}:{config['port']}:{config['transport']}\n")
-    print(f"伺服器配置已保存到 {config_file}")
 
 # 從文件加載服務器配置
 def load_server_config():
@@ -156,7 +122,6 @@ def load_server_config():
                 SERVER_CONFIGS[name]["port"] = int(port)
                 SERVER_CONFIGS[name]["transport"] = transport
         
-        print("已從配置文件加載伺服器配置")
         return True
     except Exception as e:
         print(f"加載配置文件時出錯: {e}")
@@ -224,9 +189,9 @@ async def on_chat_start():
         
         # 增加前端本地PPT上傳翻譯工具
         print("\n===== 添加前端工具 =====")
-        print(f"原始工具列表: {[t.name for t in tools]}")
+        
         enhanced_tools = add_upload_ppt_tool(tools)
-        print(f"增強後工具列表: {[t.name for t in enhanced_tools]}")
+        
         print(f"新增的工具: upload_and_translate_ppt")
         print("=========================\n")
         
@@ -242,7 +207,7 @@ async def on_chat_start():
         
         # 更新模型配置，使用特定版本並添加回調管理器
         llm = ChatOpenAI(
-            model="gpt-4o-mini-2024-07-18",  # 使用特定版本模型
+            model=OPENAI_MODEL,  # 使用特定版本模型
             temperature=0,  # 零溫度確保一致性
             streaming=True,
             callback_manager=callback_manager,

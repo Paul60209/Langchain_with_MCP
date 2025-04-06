@@ -2,80 +2,8 @@
 """
 運行腳本 - 檢查環境並啟動MCP Chainlit應用
 """
-import os
-import sys
 import subprocess
-import signal
-import asyncio
 import time
-import chainlit as cl
-
-def check_environment():
-    """檢查環境是否滿足運行需求"""
-    # 檢查Python版本
-    required_python = (3, 8)
-    current_python = sys.version_info
-    
-    if current_python < required_python:
-        print(f"錯誤: 需要Python {required_python[0]}.{required_python[1]} 或更高版本")
-        return False
-    
-    # 檢查.env文件
-    if not os.path.exists('.env'):
-        print("警告: 未找到.env文件，將使用默認配置")
-        
-    # 檢查MCP_Servers目錄
-    if not os.path.exists('MCP_Servers'):
-        print("錯誤: 未找到MCP_Servers目錄")
-        return False
-        
-    server_files = [f for f in os.listdir('MCP_Servers') if f.endswith('.py')]
-    if not server_files:
-        print("錯誤: MCP_Servers目錄中未找到任何Python文件")
-        return False
-        
-    # 檢查依賴項
-    try:
-        import chainlit
-        import langchain
-        import langchain_openai
-        import mcp
-        import langchain_mcp_adapters
-    except ImportError as e:
-        print(f"錯誤: 缺少依賴項: {e}")
-        print("請運行 'pip install -r requirements.txt' 安裝所有依賴項")
-        return False
-        
-    # 檢查應用程序文件
-    if not os.path.exists('app.py'):
-        print("錯誤: 未找到app.py文件")
-        return False
-        
-    return True
-
-def run_app():
-    """運行Chainlit應用"""
-    print("正在啟動應用...")
-    
-    # 使用 subprocess 運行應用，這樣我們可以捕捉到 KeyboardInterrupt
-    process = subprocess.Popen(["chainlit", "run", "app.py"])
-    
-    try:
-        # 等待進程完成
-        process.wait()
-    except KeyboardInterrupt:
-        # 發送中斷信號
-        print("\n接收到中斷信號，正在關閉應用...")
-        process.send_signal(signal.SIGINT)
-        # 給應用一些時間關閉
-        try:
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            # 如果應用沒有及時關閉，則強制關閉
-            print("應用沒有及時關閉，強制終止...")
-            process.kill()
-    
-    return process.returncode == 0
 
 def print_banner():
     print("""

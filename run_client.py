@@ -1,5 +1,5 @@
-import os
-import time
+# import os
+# import time
 import signal
 import sys
 import subprocess
@@ -16,8 +16,7 @@ if __name__ == "__main__":
     
     try:
         print("\n===== 啟動 MCP 客戶端 =====")
-        print("請確保 MCP 伺服器已經運行（使用 run_server.py）")
-        print("客戶端將連接到已經運行的伺服器，並且不會在退出時停止它們")
+        
         print("啟動客戶端...\n")
         
         # 使用subprocess直接執行chainlit命令而不是使用Python API
