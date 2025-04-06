@@ -1,8 +1,7 @@
 import os
 import asyncio
-import httpx
 import chainlit as cl
-from langchain.agents import AgentExecutor, create_openai_tools_agent #, create_react_agent
+from langchain.agents import AgentExecutor, create_openai_tools_agent
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.memory import ConversationBufferMemory
 from langchain_openai import ChatOpenAI
@@ -19,12 +18,12 @@ from langchain_community.tools import tool
 from langchain_core.pydantic_v1 import BaseModel, Field
 import json
 
-# 加載環境變量
+# load environment variables
 load_dotenv()
 OPENAI_MODEL = os.getenv("MODEL", "gpt-4o-mini")
 
 
-# MCP 伺服器配置
+# MCP server config.
 SERVER_CONFIGS = {
     "weather": {
         "path": os.path.join("MCP_Servers", "weather_server.py"),
@@ -43,23 +42,19 @@ SERVER_CONFIGS = {
     }
 }
 
-# 配置 OpenAI 模型
-OPENAI_MODEL = os.getenv("MODEL", "gpt-4o-mini")
-
 async def create_mcp_client_with_retry(client_config, max_retries=3):
     """
-    嘗試創建 MCP 客戶端，如果失敗則重試
+    Try to create MCP client, retry if failed
     
     Args:
-        client_config: MCP 客戶端配置
-        max_retries: 最大重試次數
+        client_config: MCP client config
+        max_retries: max retry times
         
     Returns:
-        tuple: (客戶端, 工具列表) 或 (None, None)
+        tuple: (client, tools) or (None, None)
     """
     for attempt in range(max_retries):
         try:
-            # 不使用timeout參數
             mcp_client = MultiServerMCPClient(client_config)
             await mcp_client.__aenter__()
             
@@ -67,40 +62,41 @@ async def create_mcp_client_with_retry(client_config, max_retries=3):
             try:
                 tools = mcp_client.get_tools()
                 if not tools:
-                    print("警告: 工具列表為空")
+                    print("Warning: tools list is empty")
                     tools = []
                 return mcp_client, tools
             except Exception as tool_error:
-                print(f"獲取工具列表失敗: {tool_error}")
-                # 嘗試優雅退出
+                print(f"Failed to get tools list: {tool_error}")
+                # try to exit gracefully
                 try:
                     await mcp_client.__aexit__(None, None, None)
                 except Exception as exit_error:
-                    print(f"客戶端退出錯誤: {exit_error}")
+                    print(f"Client exit error: {exit_error}")
                 raise tool_error
                 
         except Exception as e:
-            print(f"創建 MCP 客戶端失敗 (嘗試 {attempt+1}/{max_retries}): {e}")
+            print(f"Failed to create MCP client (attempt {attempt+1}/{max_retries}): {e}")
+
+            # if not the last attempt, wait for a while and retry
             if attempt < max_retries - 1:
-                # 如果不是最後一次嘗試，等待一段時間再重試
                 await asyncio.sleep(3)
     
     return None, None
 
-# 添加將服務器配置保存到文件的函數
+# function to save server config to file (Currently not used)
 def save_server_config():
-    """將伺服器配置保存到文件"""
+    """Save server config to file"""
     config_file = "server_config.txt"
     with open(config_file, "w") as f:
         for name, config in SERVER_CONFIGS.items():
             f.write(f"{name}:{config['port']}:{config['transport']}\n")
 
-# 從文件加載服務器配置
+# function to load server config from file
 def load_server_config():
-    """從文件加載伺服器配置"""
+    """Load server config from file"""
     config_file = "server_config.txt"
     if not os.path.exists(config_file):
-        print(f"找不到配置文件 {config_file}，使用默認配置")
+        print(f"Can't find config file {config_file}, using default config")
         return False
     
     try:
@@ -114,7 +110,7 @@ def load_server_config():
             
             parts = line.split(":")
             if len(parts) != 3:
-                print(f"無效的配置行: {line}")
+                print(f"Invalid config line: {line}")
                 continue
             
             name, port, transport = parts
@@ -124,40 +120,40 @@ def load_server_config():
         
         return True
     except Exception as e:
-        print(f"加載配置文件時出錯: {e}")
+        print(f"Error loading config file: {e}")
         return False
 
-# 自定義回調處理器，用於將輸出串流到Chainlit消息
+# custom callback handler, to stream output to Chainlit message
 class ChainlitStreamingCallbackHandler(BaseCallbackHandler):
-    """將LLM的輸出流式傳輸到Chainlit消息"""
+    """Stream LLM output to Chainlit message"""
     
     def __init__(self, cl_response_message):
         self.cl_response_message = cl_response_message
         self.tokens = []
         
     def on_llm_new_token(self, token: str, **kwargs):
-        """處理新生成的token"""
+        """Process new tokens"""
         self.tokens.append(token)
-        # 更新界面上的消息
+        # update the message on the UI
         content = "".join(self.tokens)
         asyncio.create_task(self.cl_response_message.update(content=content))
         
     def on_llm_end(self, response, **kwargs):
-        """LLM響應結束的處理"""
+        """Process LLM response end"""
         self.tokens = []
 
 @cl.on_chat_start
 async def on_chat_start():
-    """聊天開始時的初始化程序"""
+    """Initialization program when chat starts"""
     
-    # 顯示初始化消息
-    init_message = cl.Message(content="正在連接到 MCP 伺服器...")
+    # show the initialization message
+    init_message = cl.Message(content="Connecting to MCP servers...")
     await init_message.send()
     
-    # 加載伺服器配置
+    # load server config
     load_server_config()
     
-    # 創建 MCP 客戶端配置
+    # create MCP client config
     client_config = {}
     
     for name, config in SERVER_CONFIGS.items():
@@ -173,373 +169,369 @@ async def on_chat_start():
                 "transport": "stdio"
             }
     
-    # 初始化 MCP 客戶端（帶重試）
+    # initialize MCP client (with retry)
     try:
-        connecting_message = cl.Message(content="正在連接到 MCP 伺服器...")
+        connecting_message = cl.Message(content="Connecting to MCP servers...")
         await connecting_message.send()
         mcp_client, tools = await create_mcp_client_with_retry(client_config)
         
         if not mcp_client or not tools:
-            error_message = cl.Message(content="連接 MCP 伺服器失敗。請確保 MCP 伺服器已運行 (使用 run_server.py)。")
+            error_message = cl.Message(content="Failed to connect to MCP servers. Please ensure MCP servers are running (using run_server.py).")
             await error_message.send()
             return
         
-        # 將客戶端保存到會話
+        # save the client to the session
         cl.user_session.set("mcp_client", mcp_client)
         
-        # 增加前端本地PPT上傳翻譯工具
-        print("\n===== 添加前端工具 =====")
-        
+        # add "PPT upload translation tool
         enhanced_tools = add_upload_ppt_tool(tools)
         
-        print(f"新增的工具: upload_and_translate_ppt")
-        print("=========================\n")
         
-        # 顯示已連接的伺服器
-        servers_info = "\n".join([f"- {name} (端口: {config['port']})" for name, config in SERVER_CONFIGS.items()])
-        connected_message = cl.Message(content=f"已連接到以下 MCP 伺服器:\n{servers_info}")
+        # show the connected servers
+        servers_info = "\n".join([f"- {name} (port: {config['port']})" for name, config in SERVER_CONFIGS.items()])
+        connected_message = cl.Message(content=f"Connected to the following MCP servers:\n{servers_info}")
         await connected_message.send()
         
-        # 設置回調管理器
+        # set the callback manager
         callback_manager = CallbackManager([
-            StreamingStdOutCallbackHandler(),  # 將流式輸出顯示到控制台
+            StreamingStdOutCallbackHandler(),  # show the streaming output on console
         ])
         
-        # 更新模型配置，使用特定版本並添加回調管理器
+        # update the model config, use specific version and add the callback manager
         llm = ChatOpenAI(
-            model=OPENAI_MODEL,  # 使用特定版本模型
-            temperature=0,  # 零溫度確保一致性
+            model=OPENAI_MODEL,
+            temperature=0,  # Make sure the LLM focus on higtest priority
             streaming=True,
             callback_manager=callback_manager,
-            verbose=True
+            verbose=False # Don't show the LLM's internal reasoning process
         )
         memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
         
-        # 獲取工具名稱列表
-        tool_names = [tool.name for tool in enhanced_tools]
+        # System Message: The general/static part of the prompt, it's LLM's guideline.
+        system_message = """
+        You are a powerful AI assistant capable of using various professional tools to help users solve problems.
+
+        Tool Types and Usage Scenarios:
+
+        1. 【Weather Query Tool】
+        - Tool Name: "get_weather" or any tool name containing "weather"
+        - Usage Scenario: Any questions related to weather, temperature, humidity, or weather forecasts
+        - Input Format: {{"city": "City Name"}}
+        - Input Example: {{"city": "Taipei"}}, {{"city": "Tokyo"}}, {{"city": "New York"}}
+        - Trigger Words: "weather", "temperature", "humidity", "forecast", "rain"
+        - Example Questions: "How is the weather in Taipei today?", "Will it rain tomorrow?", "What is the temperature in Tokyo?"
+
+        2. 【Database Query Tool】
+        - Tool Name: "query_database" or any tool name containing "sql", "query", "database"
+        - Usage Scenario: Any questions requiring data queries, statistics, or table content inspection
+        - Input Format: {{"query": "SQL Query Statement"}}
+        - Input Example: {{"query": "SELECT * FROM sales LIMIT 5"}}
+        - Trigger Words: "data", "statistics", "sales", "how many", "query", "database", "table"
+        - Example Questions: "Query recent sales data", "What products are available?", "How many apples were sold?", "What is the best-selling product?"
+        - Database Schema:
+            The database is including 'sales' table, with the following columns:
+            - ID (VARCHAR): Sale record ID
+            - Date (DATE): Sale date
+            - Region (VARCHAR): Region, including: 関東, 関西
+            - City (VARCHAR): City, including: 東京, 横浜, 埼玉, 千葉, 京都, 大阪, 神戸
+            - Category (VARCHAR): Category, including: 野菜, 果物
+            - Product (VARCHAR): Product name, including: キャベツ, 玉ねぎ, トマト, リンゴ, みかん, バナナ
+            - Quantity (INT): Quantity
+            - Unit_Price (DECIMAL): Unit price
+            - Total_Price (DECIMAL): Total price
+
+        3. 【File Upload Translation Tool】
+        - Tool Name: "upload_and_translate_ppt"
+        - Usage Scenario: All requests requiring users to upload a local PowerPoint file for translation
+        - Input Format: {{"olang": "Original Language", "tlang": "Target Language"}}
+        - Input Example: {{"olang": "English", "tlang": "Chinese"}}
+        - Mandatory Trigger Conditions: When the user mentions any of the following keywords, this tool MUST be called instead of just replying with text:
+            - "translate PPT", "translate presentation", "translate PowerPoint", "PPT translation", "presentation translation"
+            - "translate the PPT", "translate the presentation", "help me translate PPT", "help me translate presentation"
+            - "PPT from X to Y", "presentation from X to Y" (where X and Y are any languages)
+        - Note: When using this tool, the system will automatically prompt the user to upload the PPT file; do not send a separate text message requesting the upload.
+        - Example Request: "Help me translate the ppt from English to Chinese" - In this case, call the tool directly with parameters {{"olang": "English", "tlang": "Chinese"}}
+
+        4. 【Server-Side Translation Tool】
+        - Tool Name: "translate_ppt"
+        - Usage Scenario: User needs to translate a PowerPoint file that already exists on the server
+        - Input Format: {{"olang": "Original Language", "tlang": "Target Language", "file_path": "File Path"}}
+        - Input Example: {{"olang": "English", "tlang": "Chinese", "file_path": "/path/to/file.pptx"}}
+        - Example Questions: "Translate the PPT file on the server", "Convert the existing presentation"
+
+        Important Principles:
+        1. Tool Selection: Carefully analyze the user's question to determine the most appropriate tool type.
+        2. Language Response: Respond in the language used by the user.
+        3. No Guessing: For questions requiring data, the appropriate tool must be used; do not guess.
+        4. JSON Format: All tool inputs must be in JSON format, not plain text strings.
+        5. Choose the Correct PPT Translation Tool: Use upload_and_translate_ppt when the user needs to translate a local file; use translate_ppt when processing a file already on the server.
+        6. Mandatory Tool Use: For requests mentioning "translate PPT", "translate presentation", etc., the tool must be used instead of just replying with text.
+
+        Decision Flow:
+        1. Analyze the user's question: Is it about weather? Data query? PPT translation?
+        2. Select the corresponding tool category.
+        3. Construct the input in the correct format.
+        4. Execute the tool and return the result.
+
+        Special Reminder:
+        - For PPT translation requests, replying only with text without calling the tool is incorrect behavior.
+        - The correct approach is to analyze the language information in the user's request (e.g., from English to Chinese) and then immediately call the upload_and_translate_ppt tool.
+        - The upload_and_translate_ppt tool will automatically handle the subsequent file upload process; no additional prompts are needed.
+        """
         
-        # 創建系統消息
-        system_message = """你是一個強大的AI助手，可以使用多種專業工具來幫助用戶解決問題。
-
-工具種類和使用場景：
-
-1. 【天氣查詢工具】
-   - 工具名稱: "get_weather" 或包含 "weather" 的工具名
-   - 使用場景: 任何與天氣、溫度、濕度、氣象預報相關的問題
-   - 輸入格式: {{"city": "城市名稱"}}
-   - 輸入範例: {{"city": "Taipei"}}, {{"city": "Tokyo"}}, {{"city": "New York"}}
-   - 觸發詞: "天氣", "weather", "下雨", "溫度", "氣溫", "濕度", "預報"
-   - 範例問題: "台北今天天氣如何?", "明天會下雨嗎?", "東京的氣溫是多少?"
-
-2. 【資料庫查詢工具】
-   - 工具名稱: "query_database" 或包含 "sql", "query", "database" 的工具名
-   - 使用場景: 任何需要查詢數據、統計資料、資料表內容的問題
-   - 輸入格式: {{"query": "SQL查詢語句"}}
-   - 輸入範例: {{"query": "SELECT * FROM sales LIMIT 5"}}
-   - 觸發詞: "數據", "資料", "銷售", "統計", "多少", "查詢", "資料庫", "表格"
-   - 範例問題: "查詢最近的銷售數據", "有哪些產品?", "賣出了多少蘋果?", "最暢銷的產品是什麼?"
-   - 資料庫結構：
-    資料庫包含 'sales' 表，具有以下欄位：
-    - ID (VARCHAR)：銷售記錄ID
-    - Date (DATE)：銷售日期
-    - Region (VARCHAR)：地區，值包括：関東, 関西
-    - City (VARCHAR)：城市，值包括：東京, 横浜, 埼玉, 千葉, 京都, 大阪, 神戸
-    - Category (VARCHAR)：類別，值包括：野菜, 果物
-    - Product (VARCHAR)：產品名稱，如：キャベツ, 玉ねぎ, トマト, リンゴ, みかん, バナナ
-    - Quantity (INT)：銷售數量
-    - Unit_Price (DECIMAL)：單價
-    - Total_Price (DECIMAL)：總價
-
-3. 【檔案上傳翻譯工具】
-   - 工具名稱: "upload_and_translate_ppt"
-   - 使用場景: 需要用戶上傳本地PowerPoint檔案進行翻譯的所有請求
-   - 輸入格式: {{"olang": "原始語言", "tlang": "目標語言"}}
-   - 輸入範例: {{"olang": "英文", "tlang": "中文"}}
-   - 強制觸發條件: 當用戶提到以下任何關鍵詞時，必須調用此工具而不是只回覆文本
-     - "翻譯PPT", "翻譯簡報", "翻譯PowerPoint", "PPT翻譯", "簡報翻譯"
-     - "將PPT翻譯", "將簡報翻譯", "幫我翻譯PPT", "幫我翻譯簡報"
-     - "PPT從X翻譯為Y", "簡報從X翻成Y" (X和Y為任何語言)
-   - 注意: 使用此工具時，系統會自動提示用戶上傳PPT檔案，無需另外發送文本訊息請求上傳
-   - 範例請求: "幫我將ppt從英文翻譯為中文" - 此時應直接調用工具並提供參數 {{"olang": "英文", "tlang": "中文"}}
-
-4. 【伺服器端翻譯工具】
-   - 工具名稱: "translate_ppt"
-   - 使用場景: 用戶需要翻譯已存在於伺服器上的PowerPoint文件
-   - 輸入格式: {{"olang": "原始語言", "tlang": "目標語言", "file_path": "檔案路徑"}}
-   - 輸入範例: {{"olang": "英文", "tlang": "中文", "file_path": "/path/to/file.pptx"}}
-   - 範例問題: "翻譯伺服器上的PPT檔案", "轉換已存在的演示文稿"
-
-重要原則:
-1. 工具選擇: 仔細分析用戶問題，判斷最合適的工具類型
-2. 語言回應: 以用戶使用的語言回應
-3. 不要猜測: 對於需要數據的問題，必須使用適當的工具而不是猜測
-4. JSON格式: 所有工具輸入必須是JSON格式，不能是純文字字串
-5. 選擇正確的PPT翻譯工具: 當用戶需要翻譯本地檔案時，必須使用 upload_and_translate_ppt；當處理伺服器上已有的檔案時，使用 translate_ppt
-6. 強制使用工具: 對於提到"翻譯PPT"、"翻譯簡報"等內容的請求，必須使用工具而不是只回覆文字訊息
-
-決策流程:
-1. 分析用戶問題是關於: 天氣? 數據查詢? PPT翻譯?
-2. 選擇對應的工具類別
-3. 構建正確格式的輸入
-4. 執行工具並返回結果
-
-特別提醒:
-- 對於PPT翻譯請求，只回覆文字而不調用工具是錯誤的行為
-- 正確做法是分析用戶請求中的語言信息(如從英文到中文)，然後立即調用upload_and_translate_ppt工具
-- upload_and_translate_ppt工具會自動處理後續的檔案上傳流程，無需額外提示"""
-        
-        # 創建 ReAct 風格的提示模板
+        # prompt: The ReAct style prompt template. 
+        # Including 5 parts: System Message, Chat History, User Message, ReAct Style Prompt and Agent Scratchpad
         prompt = ChatPromptTemplate.from_messages([
             ("system", system_message),
             MessagesPlaceholder(variable_name="chat_history"),
             ("human", "{input}"),
-            ("system", """當用戶請求翻譯PPT時，必須立即使用 upload_and_translate_ppt 工具，而不是回覆純文本消息。
-
-請使用以下格式處理用戶問題：
-
-思考: 分析用戶問題，確定需要使用什麼工具。不要寫出具體答案，而是判斷應該使用哪個工具獲取信息。
-對於與翻譯PPT相關的請求，必須使用upload_and_translate_ppt工具，這個工具會自動處理文件上傳和後續流程。
-
-行動: 選擇工具並使用適當的JSON輸入參數。
-
-觀察: 查看工具返回的結果。
-
-行動：可能需要使用另一個工具。
-
-觀察：查看新工具的結果。
-
-最終回應: 綜合所有信息，給出完整回應。使用繁體中文。"""),
+            ("system", 
+             """
+            When the user requests PPT translation, the upload_and_translate_ppt tool MUST be used immediately, and not reply with a pure text message.
+            Please process the user's question using the following format:
+            Think: Analyze the user's question, determine which tool to use. Do not write out specific answers, but judge which tool to use to get information.
+            For requests related to PPT translation, the upload_and_translate_ppt tool MUST be used, this tool will automatically handle the file upload and subsequent process.
+            Action: Select the tool and use the appropriate JSON input parameters.
+            Observation: Check the result returned by the tool.
+            Action: May need to use another tool.
+            Observation: Check the result returned by the new tool.
+            Final response: Summarize all information and provide a complete response. Please answer in the language used by the user.
+            """
+            ),
             MessagesPlaceholder(variable_name="agent_scratchpad")
         ])
         
-        # 創建代理 - 使用 OpenAI create_openai_tools_agent 代替 OpenAIFunctionsAgent
+        # Create the agent
         agent = create_openai_tools_agent(
             llm=llm,
             tools=enhanced_tools,
             prompt=prompt
         )
         
-        # 創建代理執行器，設置更高的max_iterations和verbose=True
+        # Create the agent executor
         agent_executor = AgentExecutor(
             agent=agent,
             tools=enhanced_tools,
             memory=memory,
-            verbose=True,
+            verbose=False, # Don't show the agent's internal reasoning process
             handle_parsing_errors=True,
-            max_iterations=5,
-            early_stopping_method="force",  # 如果達到最大迭代次數，強制停止
-            return_intermediate_steps=True  # 返回中間步驟，便於調試
+            max_iterations=3,
+            early_stopping_method="force",
+            return_intermediate_steps=True # Show the intermediate steps on chainlit UI
         )
         
-        # 存儲到用戶會話
+        # Save the agent executor to the user session
         cl.user_session.set("agent_executor", agent_executor)
         
-        # 發送歡迎消息
-        welcome_message = cl.Message(content="您好！我是基於 MCP 的智能助手。請問有什麼我可以幫您的？")
+        # Send the welcome message
+        welcome_message = cl.Message(content=
+            """
+            Hello！I'm your Assistant Chatbot, Lisa👩‍💼. Please tell me what you need help with.
+            """)
         await welcome_message.send()
     
     except Exception as e:
-        error_message = cl.Message(content=f"初始化 MCP 客戶端時出錯: {str(e)}")
+        error_message = cl.Message(content=f"Error initializing MCP client: {str(e)}")
         await error_message.send()
         import traceback
-        traceback.print_exc()  # 在伺服器端打印完整錯誤信息
+        traceback.print_exc()  # print the full error info on server side
 
 @cl.on_message
 async def on_message(message: cl.Message):
-    """處理用戶消息"""
-    # 獲取代理執行器
+    """Process user message"""
+    # get the agent executor
     agent_executor = cl.user_session.get("agent_executor")
     
-    # 保存當前消息 ID 到用戶會話
+    # save the current message ID to the user session
     cl.user_session.set("message_id", message.id)
     
-    # 在終端打印用戶訊息
-    print(f"\n[用戶] {message.content}\n")
+    # print the user message on console
+    print(f"\n[User] {message.content}\n")
     
     if agent_executor is None:
-        error_message = cl.Message(content="抱歉，MCP 客戶端尚未初始化，請重新開始對話。")
+        error_message = cl.Message(content="Sorry, the MCP client is not initialized yet. Please start the conversation again.")
         await error_message.send()
         return
     
-    # 創建響應消息
-    response = cl.Message(content="思考中...")
+    # create the response message
+    response = cl.Message(content="Thinking...")
     await response.send()
     
     try:
         print("-" * 40)
-        print(f"開始處理問題: {message.content}")
+        print(f"Start processing the question: {message.content}")
         
-        # 創建用於此消息的Chainlit回調處理器
+        # create the Chainlit callback handler for this message
         chainlit_callback = ChainlitStreamingCallbackHandler(response)
         
-        # 為此次調用創建特定的回調管理器
+        # create the specific callback manager for this invocation
         msg_callback_manager = CallbackManager([
-            StreamingStdOutCallbackHandler(),  # 控制台輸出
-            chainlit_callback  # Chainlit界面輸出
+            StreamingStdOutCallbackHandler(),  # console output
+            chainlit_callback  # Chainlit UI output
         ])
         
-        # 執行代理並捕獲輸出
-        print(f"\n===== 執行代理 - 處理用戶輸入: '{message.content}' =====")
+        # execute the agent and capture the output
+        print(f"\n===== Execute agent - Process user input: '{message.content}' =====")
         result = await agent_executor.ainvoke(
             {"input": message.content},
             {"callbacks": msg_callback_manager}
         )
         
-        # 檢查結果結構
-        print(f"代理執行結果keys: {result.keys()}")
+        # check the result structure
+        print(f"Agent execution result keys: {result.keys()}")
         
-        # 獲取最終輸出
-        output = result.get("output", "沒有回應")
+        # get the final output
+        output = result.get("output", "No response")
         
-        # 記錄中間步驟
-        if "intermediate_steps" in result:
-            print("\n中間步驟詳情:")
-            for i, step in enumerate(result["intermediate_steps"]):
-                print(f"  步驟 {i+1}:")
-                action = step[0]
-                observation = step[1]
-                print(f"    工具: {getattr(action, 'tool', 'unknown')}")
-                print(f"    工具類型: {type(action).__name__}")
-                print(f"    輸入: {getattr(action, 'tool_input', 'unknown')}")
-                print(f"    輸入類型: {type(getattr(action, 'tool_input', None)).__name__}")
-                print(f"    結果: {observation[:100]}..." if len(str(observation)) > 100 else f"    結果: {observation}")
+        # # record the intermediate steps
+        # if "intermediate_steps" in result:
+        #     print("\nIntermediate steps details:")
+        #     for i, step in enumerate(result["intermediate_steps"]):
+        #         print(f"   Step {i+1}:")
+        #         action = step[0]
+        #         observation = step[1]
+        #         print(f"     Tool: {getattr(action, 'tool', 'unknown')}")
+        #         print(f"     Tool type: {type(action).__name__}")
+        #         print(f"     Input: {getattr(action, 'tool_input', 'unknown')}")
+        #         print(f"     Input type: {type(getattr(action, 'tool_input', None)).__name__}")
+        #         print(f"     Result: {observation[:100]}..." if len(str(observation)) > 100 else f"     Result: {observation}")
                 
-        else:
-            print("警告: 沒有中間步驟信息")
+        # else:
+        #     print("Warning: No intermediate steps information")
         
-        # 在終端顯示 AI 回應
-        print(f"\n[AI 最終回應]\n{output}\n")
+        # display the AI response on console
+        print(f"\n[AI final response]\n{output}\n")
         print("="*50)
         
-        # 確保最終回應顯示完整
+        # ensure the final response is displayed completely
         response.content = output
         await response.update()
         
     except Exception as e:
-        print(f"處理請求時出錯: {str(e)}")
-        print(f"錯誤類型: {type(e).__name__}")
+        print(f"Error processing the request: {str(e)}")
+        print(f"Error type: {type(e).__name__}")
         import traceback
         traceback.print_exc()
         
-        # 更新消息內容
-        response.content = f"處理您的請求時發生錯誤: {str(e)}"
+        # update the message content
+        response.content = f"Error processing your request: {str(e)}"
         await response.update()
 
 @cl.on_chat_end
 async def on_chat_end():
-    """聊天結束時的清理程序"""
-    # 獲取 MCP 客戶端
+    """Clean up the program when the chat ends"""
+    # get the MCP client
     mcp_client = cl.user_session.get("mcp_client")
     if mcp_client:
         try:
-            print("正在關閉 MCP 客戶端...")
+            print("Closing the MCP client...")
             await mcp_client.__aexit__(None, None, None)
-            print("MCP 客戶端已關閉")
+            print("MCP client closed")
         except Exception as e:
-            print(f"關閉 MCP 客戶端時出錯: {str(e)}")
+            print(f"Error closing the MCP client: {str(e)}")
             import traceback
             traceback.print_exc()
     
-    print("客戶端已關閉，MCP 伺服器仍在運行")
+    print("Client closed, MCP server still running")
 
 def add_upload_ppt_tool(tools):
-    """將MCP的工具轉換為前端可用的格式，並添加本地PPT翻譯工具"""
-    # 直接使用工具原有的描述，不做修改
+    """Convert MCP tools to the format that can be used by the frontend, and add the local PPT translation tool"""
+    # directly use the original description of the tool, without modification
     enhanced_tools = [deepcopy(tool) for tool in tools]
     
-    # 使用pydantic BaseModel定義工具參數
+    # use pydantic BaseModel to define the tool parameters
     class TranslatePPTParams(BaseModel):
         olang: str = Field(
             None, 
-            description="原始文件的語言", 
+            description="The language of the original file", 
         )
         tlang: str = Field(
             None, 
-            description="要翻譯成的目標語言", 
+            description="The target language to translate to", 
         )
     
-    # 添加本地PPT翻譯工具 - 不再使用 name 參數
+    # add the local PPT translation tool
     @tool
     async def upload_and_translate_ppt(olang: str, tlang: str) -> str:
-        """將PowerPoint檔案從一種語言翻譯為另一種語言。
+        """Translate a PowerPoint file from one language to another.
         
-        使用此工具讓用戶上傳PowerPoint檔案，並將其翻譯成指定的目標語言。
-        系統會引導用戶上傳.pptx或.ppt檔案，然後進行翻譯處理。
+        Use this tool to let the user upload a PowerPoint file, and translate it to the specified target language.
+        The system will guide the user to upload a .pptx or .ppt file, and then process the translation.
         
-        參數:
-            olang: 原始語言，如 '英文'、'en'、'中文'、'zh-TW' 等
-            tlang: 目標語言，如 '中文'、'zh-TW'、'英文'、'en' 等
+        Parameters:
+            olang: The original language, e.g. 'English', 'en', 'Chinese', 'zh-TW' etc.
+            tlang: The target language, e.g. 'Chinese', 'zh-TW', 'English', 'en' etc.
         
-        返回:
-            翻譯結果的訊息以及檔案下載連結
+        Returns:
+            The message of the translation result and the file download link
         """
-        print(f"正在處理 PPT 翻譯請求: 從 {olang} 到 {tlang}")
+        print(f"Processing the PPT translation request: from {olang} to {tlang}")
         
         try:
-            # 調用處理函數
+            # call the processing function
             result = await handle_ppt_translation(olang, tlang)
             return result
         except Exception as e:
-            error_msg = f"處理翻譯請求時發生錯誤: {str(e)}"
+            error_msg = f"Error processing the translation request: {str(e)}"
             print(error_msg)
             return error_msg
 
-    # 將工具添加到增強工具列表
+    # add the tool to the enhanced tools list
     enhanced_tools.append(upload_and_translate_ppt)
     
     return enhanced_tools
 
-# 處理PPT文件上傳和翻譯的函數
+# Process the PPT file upload and translation function
 async def handle_ppt_translation(olang: str, tlang: str):
-    """處理 PowerPoint 翻譯請求。
+    """Process the PowerPoint translation request.
     
-    參數:
-        olang (str): 原始語言
-        tlang (str): 目標語言
+    Parameters:
+        olang (str): The original language
+        tlang (str): The target language
         
-    返回:
-        str: 翻譯結果消息
+    Returns:
+        str: The message of the translation result
     """
-    # 讓用戶上傳檔案
+    # let the user upload the file
     file_msg = cl.AskFileMessage(
-        content=f"請上傳要從{olang}翻譯到{tlang}的PowerPoint檔案。",
+        content=f"Please upload the PowerPoint file to be translated from {olang} to {tlang}.",
         accept=["application/vnd.ms-powerpoint", "application/vnd.openxmlformats-officedocument.presentationml.presentation"],
         max_size_mb=10,
         timeout=180
     )
     
-    # 等待用戶上傳檔案
+    # wait for the user to upload the file
     file_response = await file_msg.send()
     
-    # 檢查是否有上傳的檔案
+    # check if there is an uploaded file
     if not file_response:
-        return "錯誤：未收到檔案或上傳超時，請稍後再試。"
+        return "Error: No file received or upload timeout, please try again later."
     
-    # AskFileResponse 處理
+    # AskFileResponse processing
     if isinstance(file_response, list) and len(file_response) > 0:
         uploaded_file = file_response[0]
         file_name = uploaded_file.name
         file_path = uploaded_file.path
     else:
-        return "錯誤：未能正確獲取上傳的檔案，請稍後再試。"
+        return "Error: Unable to correctly obtain the uploaded file, please try again later."
     
-    # 確認檔案格式
+    # confirm the file format
     if not (file_name.lower().endswith('.pptx') or file_name.lower().endswith('.ppt')):
-        return f"錯誤：不支援的檔案格式。請上傳.ppt或.pptx檔案，而不是 '{file_name}'。"
+        return f"Error: Unsupported file format. Please upload a .ppt or .pptx file, not '{file_name}'."
     
-    # 通知用戶處理中
-    processing_msg = cl.Message(content=f"收到檔案 '{file_name}'，正在處理翻譯請求...")
+    # notify the user that the processing is in progress
+    processing_msg = cl.Message(content=f"Received file '{file_name}', processing the translation request...")
     await processing_msg.send()
     
     try:
-        # 讀取文件內容
+        # read the file content
         with open(file_path, "rb") as f:
             file_content = f.read()
         
-        # 將二進制文件內容轉換為 base64 字符串
+        # convert the binary file content to a base64 string
         file_content_base64 = base64.b64encode(file_content).decode('utf-8')
         
-        # 準備MCP客戶端調用參數
+        # prepare the MCP client invocation parameters
         params = {
             "olang": olang,
             "tlang": tlang,
@@ -547,76 +539,76 @@ async def handle_ppt_translation(olang: str, tlang: str):
             "file_name": file_name
         }
         
-        # 獲取可用工具列表
+        # get the available tools list
         mcp_client = cl.user_session.get("mcp_client")
         tools = mcp_client.get_tools()
         translate_ppt_tool = None
         
-        # 尋找翻譯工具
+        # find the translation tool
         for tool in tools:
             if tool.name == "translate_ppt":
                 translate_ppt_tool = tool
                 break
         
-        # 調用翻譯工具
+        # call the translation tool
         if translate_ppt_tool:
             result = await translate_ppt_tool.ainvoke(params)
             
-            # 檢查結果格式
+            # check the result format
             if isinstance(result, str):
-                # 嘗試解析 JSON 字符串
+                # try to parse the JSON string
                 try:
                     result_dict = json.loads(result)
                     if result_dict.get("success", False):
-                        # 從響應中提取文件內容和文件名
+                        # extract the file content and file name from the response
                         translated_file_content = result_dict.get("file_content")
                         translated_file_name = result_dict.get("file_name", "translated_document.pptx")
                         
-                        # 將 base64 內容解碼為二進制
+                        # decode the base64 content to binary
                         binary_content = base64.b64decode(translated_file_content)
                         
-                        # 創建一個臨時文件
+                        # create a temporary file
                         temp_dir = tempfile.gettempdir()
                         output_path = os.path.join(temp_dir, translated_file_name)
                         
                         with open(output_path, "wb") as f:
                             f.write(binary_content)
                         
-                        # 創建文件元素並包含在消息中發送
+                        # create a file element and send it in the message
                         file_element = cl.File(
                             name=translated_file_name,
                             path=output_path,
-                            display="inline"  # 使用內聯顯示
+                            display="inline"  # use inline display
                         )
                         
-                        # 使用元素列表發送消息
+                        # send the message with the element list
                         await cl.Message(
-                            content="翻譯完成！以下是翻譯後的檔案：",
+                            content="Translation completed! Here is the translated file:",
                             elements=[file_element]
                         ).send()
                         
-                        return f"您可以點擊上方的檔案連結來下載翻譯好的文件 '{translated_file_name}'。"
+                        return f"You can click the file link above to download the translated file '{translated_file_name}'."
                     else:
-                        return f"翻譯錯誤：{result_dict.get('message', '未知錯誤')}"
+                        return f"Translation error: {result_dict.get('message', 'Unknown error')}"
                 except json.JSONDecodeError:
-                    # 不是 JSON 格式，直接返回
+                    # not JSON format, return directly
                     return result
             else:
-                # 不是字符串形式的結果
-                return f"翻譯完成，但結果格式異常：{str(result)}"
+                # not a string result
+                return f"Translation completed, but the result format is abnormal: {str(result)}"
         else:
-            return "無法找到翻譯工具，請確認 MCP 服務器已正確啟動。"
+            return "Unable to find the translation tool, please ensure the MCP server is correctly started."
         
     except Exception as e:
-        logging.exception("翻譯PPT時發生錯誤")
-        return f"翻譯過程中發生錯誤: {str(e)}"
+        logging.exception("Error occurred during PPT translation")
+        return f"Error occurred during PPT translation: {str(e)}"
 
 if __name__ == "__main__":
     try:
-        # 直接從命令行運行時的入口
+        # the entry when running directly from the command line
         cl.run()
     except KeyboardInterrupt:
-        print("接收到鍵盤中斷，正在關閉客戶端...")
+        print("Received keyboard interrupt, closing the client...")
     finally:
-        # 修改這裡，不要在結束時停止伺服器
-        print("客戶端已關閉，MCP 伺服器仍在運行") 
+        # modify here, don't stop the server when ending
+        print("Client closed, MCP server still running") 

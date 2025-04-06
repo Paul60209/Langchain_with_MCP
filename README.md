@@ -1,88 +1,158 @@
-# LangChain MCP Chainlit 整合應用
+# Langchain with MCP Integrated Application
 
-這個項目整合了 LangChain、MCP（Model Context Protocol）和 Chainlit，創建了一個強大的對話式 AI 應用。
+## 1. Project Scope
 
-## 功能特點
+This project primarily combines the Langchain framework, Chainlit user interface, and the Model Context Protocol (MCP) to build an AI application capable of utilizing external tools.
 
-- **多 MCP 服務器支持**：可同時連接到多個 MCP 服務器，擴展功能
-- **互動式界面**：使用 Chainlit 提供美觀的用戶界面
-- **動態工具選擇**：可在運行時更改連接的 MCP 服務器
-- **強大的智能體**：基於 LangChain 的 ReAct 代理，能夠理解任務並選擇合適的工具
+*   **Core Components:**
+    *   A **client application (`app.py`)** based on Chainlit and Langchain Agent.
+    *   Three independently running **MCP Tool Servers (`MCP_Servers/`)**:
+        *   Weather Query (`weather_server.py`)
+        *   Database Query (`sql_query_server.py`)
+        *   PowerPoint Translation (`ppt_translator_server.py`)
+    *   **Startup and Management Scripts (`run.py`, `run_server.py`, `run_client.py`)** to simplify the launch process.
+*   **Communication Protocol:** Uses **MCP (Model Context Protocol)** as the standardized communication method between the client and tool servers (via SSE transport).
+*   **Goal:** To provide a foundational platform for understanding and experimenting with the MCP Client-Server architecture, Langchain Agent and Tool interaction, and Chainlit UI integration.
 
-## 預設服務器
+## 2. Quick Start
 
-該應用預設連接到以下 MCP 服務器：
+### 2.1. Environment Setup
 
-- **天氣查詢服務器**：提供全球天氣查詢功能
-- **SQL 查詢服務器**：提供數據庫查詢功能
-- **PPT 翻譯服務器**：提供 PPT 文件翻譯功能
+1.  **Python Version:** Ensure you have Python 3.10 or higher installed.
+2.  **Install Dependencies:** Open a terminal in the project root directory and run the following command to install all necessary Python packages:
+    ```bash
+    pip install -r requirements.txt
+    ```
+3.  **Set Environment Variables (Important):**
+    *   Find the `.env_example` file in the project root directory.
+    *   **Copy** it and **rename** the copy to `.env`.
+    *   **Edit the `.env` file** and fill in your own API keys and database settings:
+        *   `OPENAI_API_KEY`: Your OpenAI API key (used for PPT translation).
+        *   `OPENWEATHER_API_KEY`: Your OpenWeatherMap API key (used for weather query).
+        *   `CLEARDB_DATABASE_URL`: Your MySQL database connection URL, format: `mysql://user:password@host:port/dbname` (used for database query).
+        *   `USER_AGENT`: (Optional, might be needed by OpenWeather) Set a User-Agent string.
 
-## 安裝和運行
+### 2.2. Start MCP Servers
 
-### 先決條件
+**Using the Launcher**
 
-- Python 3.8 或更高版本
-- 安裝所有依賴項
+1.  In the terminal at the project root directory, run:
+    ```bash
+    python run.py
+    ```
+2.  When the menu prompt appears, enter `1` (Start servers only) or `3` (Start servers and client), then press Enter.
+3.  The servers (Weather, SQL, PPT Translator) will start in the background, listening on default ports 8001, 8002, 8003 respectively. The script automatically checks ports and writes the running configuration to `server_config.txt`.
+4.  **Note:** The servers run persistently in the background. Closing this terminal **will not** stop the servers.
+5.  **Stop Servers:** Press `Ctrl+C` in the terminal where `run.py` was executed if you chose option 3, or manage the background processes separately if you chose option 1. *(Correction: Need a better way to stop background servers - `run_server.py` handles this)*. To stop servers started by `run_server.py` (or option 1/3 of `run.py`), press `Ctrl+C` in the terminal running `run_server.py` or the main `run.py`.
 
-### 安裝
+### 2.3. Start Chainlit Client
 
-```bash
-# 克隆存儲庫
-git clone https://github.com/yourusername/langchain_with_MCP.git
-cd langchain_with_MCP
+**Prerequisite:** Ensure the MCP servers have been started according to step 2.2.
 
-# 安裝依賴項
-pip install -r requirements.txt
-```
+**Using the Launcher**
 
-### 設置環境變量
+1.  In the terminal at the project root directory, run:
+    ```bash
+    python run.py
+    ```
+2.  When the menu prompt appears, enter `2` (Start client only) or `3` (Start servers and client), then press Enter.
+3.  The script will automatically execute `chainlit run app.py`.
+4.  Wait for Chainlit to finish starting, then open the provided URL (usually `http://localhost:8000`) in your browser.
+5.  **Stop Client:** Press `Ctrl+C` in the terminal running the Chainlit client.
 
-創建 `.env` 文件並配置以下變量：
+## 3. Tool Descriptions
 
-```
-MODEL = "gpt-4o-mini"
-OPENAI_API_KEY = "your_openai_api_key"
-OPENWEATHER_API_KEY = "your_openweather_api_key"
-USER_AGENT = "your_app/1.0"
-OPENWEATHER_API_BASE = "https://api.openweathermap.org/data/2.5/weather"
-CLEARDB_DATABASE_URL = "mysql://user:password@host:port/db"
-```
+The Langchain Agent (`app.py`) automatically discovers and uses the following tools provided by the MCP servers via the MCP Client:
 
-### 運行應用
+### 3.1. Weather Query
 
-```bash
-# 使用運行腳本啟動
-python run.py
+*   **Function:** Queries real-time weather information (temperature, humidity, conditions, wind speed) for a specified city.
+*   **Server Script:** `MCP_Servers/weather_server.py`
+*   **Tool Name (Used by Agent):** `query_weather`
+*   **Main Dependency:** OpenWeatherMap API (requires `OPENWEATHER_API_KEY` in `.env`)
+*   **Example Client Connection Config (if connecting independently):**
+    ```json
+    {
+      "mcpServers": {
+        "weather": {
+          "url": "http://localhost:8001/sse", // Or the deployed public URL
+          "transport": "sse"
+        }
+      }
+    }
+    ```
 
-# 或直接使用 Chainlit 啟動
-chainlit run app.py
-```
+### 3.2. SQL Query
 
-## 使用方法
+*   **Function:** Executes SQL `SELECT` statements to query a pre-configured sales database (containing product, region, sales figures, etc.).
+*   **Server Script:** `MCP_Servers/sql_query_server.py`
+*   **Tool Name (Used by Agent):** `query_database`
+*   **Main Dependency:** MySQL Database (requires `CLEARDB_DATABASE_URL` in `.env`)
+*   **Example Client Connection Config (if connecting independently):**
+    ```json
+    {
+      "mcpServers": {
+        "sql_query": {
+          "url": "http://localhost:8002/sse", // Or the deployed public URL
+          "transport": "sse"
+        }
+      }
+    }
+    ```
 
-1. 啟動應用後，打開瀏覽器訪問 `http://localhost:8000`
-2. 使用服務器選擇器選擇要連接的 MCP 服務器
-3. 在聊天框中輸入問題或要求
-4. AI 助手將分析請求並使用合適的工具生成回應
+### 3.3. PPT Translator
 
-## 添加新的 MCP 服務器
+*   **Function:** Translates PowerPoint files (.ppt/.pptx) from a source language to a target language, attempting to preserve the original formatting.
+*   **Server Script:** `MCP_Servers/ppt_translator_server.py`
+*   **Tool Names (Used by Agent):**
+    *   `translate_ppt`: The core server-side translation tool, receives Base64 encoded file content.
+    *   `upload_and_translate_ppt`: A front-end helper tool defined in `app.py` that triggers Chainlit's file upload interface and calls `translate_ppt` upon receiving the file. The Agent is prompted to prioritize this tool when the user requests translation of a local PPT.
+*   **Main Dependencies:** OpenAI API (requires `OPENAI_API_KEY` in `.env`), `python-pptx`
+*   **Example Client Connection Config (if connecting independently):**
+    ```json
+    {
+      "mcpServers": {
+        "ppt_translator": {
+          "url": "http://localhost:8003/sse", // Or the deployed public URL
+          "transport": "sse"
+        }
+      }
+    }
+    ```
 
-要添加新的 MCP 服務器：
+## 4. Architecture Structure
 
-1. 在 `MCP_Servers` 目錄中創建新的服務器文件
-2. 啟動應用時，新服務器會自動顯示在選擇器中
+This project adopts a clear **Client-Server** architecture, utilizing **MCP (Model Context Protocol)** for standardized communication.
 
-## 技術架構
+### High Level Architecture
+![](images/Chatbot_Architecture(High%20Level).png)
 
-- **Chainlit**：提供前端用戶界面
-- **LangChain**：提供 LLM 應用開發框架
-- **MCP**：提供標準化的模型上下文協議
-- **langchain_mcp_adapters**：連接 LangChain 和 MCP 服務器的適配器
+### Function Level Architecture
+![](images/Chatbot_Architecture(Function%20Level).png)
+*   **Launch & Management Layer (`run.py`, `run_server.py`, `run_client.py`):** Provides unified launch management. `run_server.py` independently manages the lifecycle of all MCP tool server subprocesses.
+*   **Application Layer (Client - `app.py`):** A **Chainlit**-based Web UI, embedding a **Langchain Agent** as its core, communicating with backend tool servers via the **MCP Client Adapter**.
+*   **Tool Server Layer (MCP Servers - `MCP_Servers/*.py`):** Each server is an independent Python process, implementing the MCP tool interface using **FastMCP**, and providing a communication endpoint via **SSE**.
+*   **Communication Protocol:** **MCP over SSE** is used between the client and servers.
+*   **Configuration Management:** Uses `.env` to manage sensitive configurations, `server_config.txt` records server running ports.
 
-## 幫助和支持
+## 5. Project Technologies
 
-如有問題或需要幫助，請提交 GitHub Issue 或聯繫項目維護者。
+*   **MCP (Model Context Protocol):** Serves as the standardized interface protocol between the client and tool servers.
+*   **Langchain:** The core framework for building LLM applications, especially the implementation of Agent Executor.
+*   **Chainlit:** A Python framework for quickly building chatbot UIs.
+*   **Langchain MCP Adapters:** The bridge connecting Langchain Agent and MCP tools.
+*   **FastAPI/Starlette/Uvicorn:** The ASGI web framework and server underlying the MCP servers.
+*   **OpenAI API:** Provides LLM and translation capabilities.
+*   **Python-pptx:** Handles PowerPoint files.
+*   **Docker (Optional Deployment):** Each server can be packaged into Docker images for deployment.
 
-## 許可證
+## 6. Project License
 
-本項目使用 MIT 許可證 - 詳見 LICENSE 文件。
+This project is licensed under the **Apache License 2.0**.
+
+You can find the full license text in the `LICENSE` file in the project root directory. In short, it's a permissive open-source license that allows you to freely use, modify, and distribute the code (including for commercial purposes), provided you retain the original copyright and license notices.
+
+## 7. Additional Notes
+
+*   **Deployment:** Although currently designed for local execution, the project can be made publicly accessible by Dockerizing the MCP servers and deploying them to a cloud platform (e.g., Google Cloud Run). The server connection configuration in `app.py` would need modification accordingly.
+*   **Extension:** You can easily add more custom MCP tool servers by referencing the structure of the existing ones.
