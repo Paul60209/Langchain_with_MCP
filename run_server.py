@@ -7,7 +7,7 @@ import sys
 import socket
 import psutil
 
-# MCP 伺服器配置
+# MCP Server Configurations
 SERVER_CONFIGS = {
     "weather": {
         "path": os.path.join("MCP_Servers", "weather_server.py"),
@@ -26,15 +26,15 @@ SERVER_CONFIGS = {
     }
 }
 
-# 存儲伺服器進程
+# Store server processes
 server_processes = {}
-# 存儲伺服器輸出日誌
+# Store server output logs
 server_logs = {}
-# 是否正在停止伺服器
+# Flag indicating if servers are being stopped
 is_stopping = False
 
 def read_process_output(process, name, output_type):
-    """讀取進程的輸出（stdout 或 stderr）並保存到日誌中"""
+    """Read process output (stdout or stderr) and save to logs."""
     if output_type == "stdout":
         stream = process.stdout
     else:
@@ -56,80 +56,80 @@ def read_process_output(process, name, output_type):
             server_logs[log_key].append(line_str)
 
 def check_and_kill_process_on_port(port):
-    """檢查指定端口是否被佔用，如果被佔用則嘗試終止佔用該端口的進程"""
+    """Check if the specified port is occupied, and if so, attempt to terminate the occupying process."""
     try:
-        # 創建一個socket來嘗試綁定端口
+        # Create a socket to try binding the port
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(1)
         result = sock.connect_ex(('127.0.0.1', port))
         sock.close()
         
-        # 如果端口可用（連接失敗），則返回
+        # If the port is available (connection failed), return
         if result != 0:
-            print(f"端口 {port} 可用。")
+            print(f"Port {port} is available.")
             return True
         
-        print(f"端口 {port} 被佔用，嘗試終止佔用進程...")
+        print(f"Port {port} is occupied, attempting to terminate the occupying process...")
         
-        # 查找佔用該端口的進程
+        # Find the process occupying the port
         for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
             try:
                 for conn in proc.connections(kind='inet'):
                     if conn.laddr.port == port:
-                        print(f"發現佔用端口 {port} 的進程: PID={proc.pid}, 名稱={proc.name()}")
+                        print(f"Found process occupying port {port}: PID={proc.pid}, Name={proc.name()}")
                         
-                        # 終止進程
+                        # Terminate the process
                         proc.terminate()
-                        print(f"已發送終止信號到進程 {proc.pid}")
+                        print(f"Sent termination signal to process {proc.pid}")
                         
-                        # 等待進程終止（最多等待5秒）
+                        # Wait for the process to terminate (max 5 seconds)
                         proc.wait(5)
-                        print(f"進程 {proc.pid} 已終止")
+                        print(f"Process {proc.pid} has terminated")
                         
-                        # 再次檢查端口是否可用
+                        # Check again if the port is available
                         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                         sock.settimeout(1)
                         result = sock.connect_ex(('127.0.0.1', port))
                         sock.close()
                         
                         if result != 0:
-                            print(f"端口 {port} 現在可用。")
+                            print(f"Port {port} is now available.")
                             return True
                         else:
-                            print(f"端口 {port} 仍然被佔用，嘗試強制終止進程...")
-                            proc.kill()  # 強制終止
-                            time.sleep(1)  # 等待操作系統釋放端口
-                            return check_and_kill_process_on_port(port)  # 遞歸檢查
+                            print(f"Port {port} is still occupied, attempting to force kill the process...")
+                            proc.kill()  # Force kill
+                            time.sleep(1)  # Wait for the OS to release the port
+                            return check_and_kill_process_on_port(port)  # Recursive check
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 pass
         
-        # 如果找不到具體進程但端口仍被佔用
-        print(f"無法找到佔用端口 {port} 的具體進程。")
+        # If no specific process found but port is still occupied
+        print(f"Could not find the specific process occupying port {port}.")
         return False
     
     except Exception as e:
-        print(f"檢查端口 {port} 時出錯: {e}")
+        print(f"Error checking port {port}: {e}")
         return False
 
 def ensure_ports_available():
-    """確保所有配置的端口都可用"""
-    print("\n===== 檢查並確保所有端口可用 =====\n")
+    """Ensure all configured ports are available."""
+    print("\n===== Checking and ensuring all ports are available =====\n")
     
     for name, config in SERVER_CONFIGS.items():
         port = config["port"]
-        print(f"檢查 {name} 伺服器的端口 {port}...")
+        print(f"Checking port {port} for {name} server...")
         if check_and_kill_process_on_port(port):
-            print(f"{name} 伺服器的端口 {port} 已準備就緒。")
+            print(f"Port {port} for {name} server is ready.")
         else:
-            print(f"警告: 無法釋放 {name} 伺服器的端口 {port}。")
+            print(f"Warning: Could not free up port {port} for {name} server.")
 
 def start_server(name, config):
-    """啟動 MCP 伺服器並返回進程"""
-    # 使用配置中指定的端口
+    """Start an MCP server and return the process."""
+    # Use the port specified in the config
     cmd = ["python", config["path"], "--port", str(config["port"])]
-    print(f"啟動伺服器: {name} - {' '.join(cmd)}")
+    print(f"Starting server: {name} - {' '.join(cmd)}")
     
-    # 啟動進程
+    # Start the process
     process = subprocess.Popen(
         cmd, 
         stdout=subprocess.PIPE, 
@@ -138,7 +138,7 @@ def start_server(name, config):
         bufsize=1
     )
     
-    # 啟動讀取輸出的線程
+    # Start threads to read output
     stdout_thread = threading.Thread(
         target=read_process_output, 
         args=(process, name, "stdout"), 
@@ -152,129 +152,129 @@ def start_server(name, config):
     stdout_thread.start()
     stderr_thread.start()
     
-    # 等待一段時間，檢查進程是否成功啟動
+    # Wait a bit and check if the process started successfully
     time.sleep(2)
     if process.poll() is not None:
-        # 進程已終止，發生了某些錯誤
-        print(f"伺服器 {name} 在端口 {config['port']} 啟動失敗")
+        # Process terminated, something went wrong
+        print(f"Server {name} failed to start on port {config['port']}")
         return None
     
-    print(f"伺服器 {name} 已成功啟動在端口 {config['port']}")
+    print(f"Server {name} started successfully on port {config['port']}")
     return process
 
 def stop_server(name):
-    """停止指定的 MCP 伺服器"""
+    """Stop the specified MCP server."""
     process = server_processes.get(name)
     stopped_process = None
-    if process and process.poll() is None:  # 進程仍在運行
-        print(f"停止伺服器: {name}")
+    if process and process.poll() is None:  # Process is still running
+        print(f"Stopping server: {name}")
         stopped_process = process
         try:
-            process.terminate()  # 發送 SIGTERM
-            for _ in range(50):  # 等待最多 5 秒
+            process.terminate()  # Send SIGTERM
+            for _ in range(50):  # Wait up to 5 seconds
                 if process.poll() is not None:
                     break
                 time.sleep(0.1)
             else:
-                print(f"強制終止伺服器: {name}")
-                process.kill()  # 發送 SIGKILL
+                print(f"Force stopping server: {name}")
+                process.kill()  # Send SIGKILL
         except Exception as e:
-            print(f"停止伺服器 {name} 時出錯: {e}")
+            print(f"Error stopping server {name}: {e}")
         finally:
             if name in server_processes:
                 del server_processes[name]
     return stopped_process
 
 def stop_all_servers():
-    """停止所有正在運行的 MCP 伺服器"""
+    """Stop all running MCP servers."""
     global is_stopping
     is_stopping = True
 
-    print("\n正在嘗試停止所有伺服器...")
+    print("\nAttempting to stop all servers...")
     processes_to_wait = []
     for name in list(server_processes.keys()):
         process = stop_server(name)
         if process:
             processes_to_wait.append((name, process))
 
-    # 等待所有被要求停止的進程結束
+    # Wait for all requested processes to terminate
     if processes_to_wait:
-        print("等待伺服器進程完全終止...")
+        print("Waiting for server processes to terminate completely...")
         for name, process in processes_to_wait:
             try:
-                # 檢查進程是否仍在運行才等待
+                # Only wait if the process is still running
                 if process.poll() is None:
                     process.wait(timeout=5)
-                    print(f"伺服器 {name} 已確認終止。")
+                    print(f"Server {name} confirmed terminated.")
                 else:
-                    print(f"伺服器 {name} 在檢查時已停止。")
+                    print(f"Server {name} was already stopped when checked.")
             except subprocess.TimeoutExpired:
-                print(f"警告: 伺服器 {name} 在等待超時後仍未終止。可能需要手動檢查。")
+                print(f"Warning: Server {name} did not terminate after timeout. Manual check might be needed.")
             except Exception as e:
-                 print(f"等待伺服器 {name} 終止時出錯: {e}")
+                 print(f"Error waiting for server {name} to terminate: {e}")
 
-    print("所有伺服器停止流程完成。")
+    print("All server stopping procedures completed.")
 
 def save_server_config():
-    """將伺服器配置保存到文件"""
+    """Save the server configuration to a file."""
     config_file = "server_config.txt"
     with open(config_file, "w") as f:
         for name, config in SERVER_CONFIGS.items():
-            # 只保存成功啟動的伺服器
+            # Only save successfully started servers
             if name in server_processes and server_processes[name] is not None and server_processes[name].poll() is None:
                 f.write(f"{name}:{config['port']}:{config['transport']}\n")
-    print(f"伺服器配置已保存到 {config_file}")
+    print(f"Server configuration saved to {config_file}")
 
 def start_all_servers():
-    """啟動所有 MCP 伺服器"""
+    """Start all MCP servers."""
     global is_stopping
     is_stopping = False
     
-    print("\n===== 正在啟動所有 MCP 伺服器 =====\n")
+    print("\n===== Starting all MCP Servers =====\n")
     
-    # 確保之前的伺服器都已停止
+    # Ensure previous servers are stopped
     for name in list(server_processes.keys()):
         stop_server(name)
     
-    # 清空日誌
+    # Clear logs
     server_logs.clear()
     
-    # 確保所有端口可用
+    # Ensure all ports are available
     ensure_ports_available()
     
-    # 啟動所有伺服器
+    # Start all servers
     for name, config in SERVER_CONFIGS.items():
-        print(f"\n--- 啟動 {name} 伺服器 ---")
+        print(f"\n--- Starting {name} Server ---")
         server_processes[name] = start_server(name, config)
     
-    # 檢查啟動狀態
+    # Check startup status
     failed_servers = []
     for name, process in server_processes.items():
         if process is None or process.poll() is not None:
             failed_servers.append(name)
     
     if failed_servers:
-        print(f"\n警告：以下伺服器未能成功啟動: {', '.join(failed_servers)}")
+        print(f"\nWarning: The following servers failed to start: {', '.join(failed_servers)}")
     
-    # 顯示已啟動的伺服器和端口
-    print("\n===== MCP 伺服器狀態 =====")
+    # Display status of started servers and ports
+    print("\n===== MCP Server Status =====")
     for name, config in SERVER_CONFIGS.items():
         if name in server_processes and server_processes[name] is not None and server_processes[name].poll() is None:
-            print(f"- {name}: 運行中 (端口: {config['port']})")
+            print(f"- {name}: Running (Port: {config['port']})")
         else:
-            print(f"- {name}: 未運行")
+            print(f"- {name}: Not running")
     
-    # 保存伺服器配置到文件
+    # Save server configuration to file
     save_server_config()
     
-    print("\n所有 MCP 伺服器已啟動完成。按 Ctrl+C 停止所有伺服器。")
-    print("客戶端可以使用這些伺服器進行連接，並在不停止伺服器的情況下啟動或關閉。")
+    print("\nAll MCP servers have completed startup. Press Ctrl+C to stop all servers.")
+    print("Client can connect using these servers and can be started or stopped without stopping the servers.")
 
-# Restore original signal handler
+# Signal handler function
 def signal_handler(sig, frame):
-    print(f"\n接收到信號 {sig}, 正在關閉所有伺服器...")
+    print(f"\nSignal {sig} received, shutting down all servers...")
     stop_all_servers()
-    print("伺服器已安全停止。")
+    print("Servers have been stopped safely.")
     sys.exit(0)
 
 if __name__ == "__main__":
@@ -292,9 +292,9 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         # This block might not be strictly necessary anymore if signals are handled,
         # but kept for robustness in case signal handler somehow fails.
-        print("\n接收到鍵盤中斷(備用處理)，正在關閉所有伺服器...")
+        print("\nKeyboard interrupt received (fallback handling), shutting down all servers...")
         stop_all_servers()
-        print("伺服器已安全停止(備用處理)。")
+        print("Servers have been stopped safely (fallback handling).")
     except Exception as e:
-        print(f"\n主程序發生未處理錯誤: {e}")
+        print(f"\nUnhandled error in main process: {e}")
         stop_all_servers() # Attempt cleanup on other errors too 

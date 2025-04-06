@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-運行腳本 - 檢查環境並啟動MCP Chainlit應用
+Run Script - Check environment and start the MCP Chainlit application
 """
 import subprocess
 import time
@@ -8,38 +8,38 @@ import time
 def print_banner():
     print("""
 ===============================================
-            MCP 應用啟動器
+            MCP Application Launcher
 ===============================================
-請選擇要啟動的服務:
+Please select the service to start:
 
-1. 僅啟動 MCP 伺服器  (run_server.py)
-2. 僅啟動客戶端      (run_client.py)
-3. 同時啟動伺服器和客戶端 (兩者)
-4. 退出
+1. Start MCP Servers only  (run_server.py)
+2. Start Client only       (run_client.py)
+3. Start Servers and Client (Both)
+4. Exit
 
-伺服器會在後台運行，客戶端可以多次啟動和關閉。
-關閉客戶端不會停止伺服器。
+Servers will run in the background. Client can be started and stopped multiple times.
+Closing the client does not stop the servers.
 ===============================================
 """)
 
 def run_server():
-    """啟動 MCP 伺服器"""
-    print("\n正在啟動 MCP 伺服器...")
+    """Start the MCP servers."""
+    print("\nStarting MCP Servers...")
     subprocess.Popen(["python", "run_server.py"])
-    print("MCP 伺服器已在背景啟動")
+    print("MCP Servers started in the background.")
 
 def run_client():
-    """啟動客戶端"""
-    print("\n正在啟動客戶端...")
+    """Start the client."""
+    print("\nStarting Client...")
     subprocess.run(["python", "run_client.py"])
 
 def main():
-    """主函數"""
+    """Main function."""
     print_banner()
     
     while True:
         try:
-            choice = input("請輸入選擇 (1-4): ").strip()
+            choice = input("Enter your choice (1-4): ").strip()
             
             if choice == "1":
                 run_server()
@@ -49,20 +49,20 @@ def main():
                 break
             elif choice == "3":
                 run_server()
-                # 給伺服器一些時間啟動
+                # Give servers some time to start
                 time.sleep(5)
                 run_client()
                 break
             elif choice == "4":
-                print("退出程序")
+                print("Exiting program.")
                 break
             else:
-                print("無效的選擇，請重新輸入")
+                print("Invalid choice, please enter again.")
         except KeyboardInterrupt:
-            print("\n程序被中斷")
+            print("\nProgram interrupted.")
             break
         except Exception as e:
-            print(f"發生錯誤: {e}")
+            print(f"An error occurred: {e}")
             break
 
 if __name__ == "__main__":

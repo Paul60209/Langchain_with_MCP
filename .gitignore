@@ -57,6 +57,7 @@ Desktop.ini
 
 # 輸出目錄
 output/
+.files/
 
 # Chainlit 隱藏文件
 .chainlit/
