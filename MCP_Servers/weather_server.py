@@ -34,7 +34,7 @@ async def fetch_weather(city: str) -> dict[str, Any] | None:
         "q": city,
         "appid": API_KEY,
         "units": "metric",
-        "lang": "en" # Language for description, changed from zh_cn to en
+        "lang": "en"
     }
     headers = {"User-Agent": USER_AGENT}
 
