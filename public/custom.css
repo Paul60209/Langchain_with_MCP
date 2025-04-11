@@ -1,0 +1,122 @@
+/* public/custom.css */
+
+/* 定義 TCC 風格的顏色變數 */
+:root {
+    --tcc-primary-red: #A94440; /* TCC Logo 紅棕色 (近似值) */
+    --tcc-secondary-grey: #B0B0B0; /* TCC Logo 灰色 (近似值) */
+    --tcc-dark-text: #333333;    /* 主要文字顏色 (深灰) */
+    --tcc-light-text: #FFFFFF;   /* 淺色文字 (白色) */
+    --tcc-background: #FFFFFF; /* 主要背景色 (白色) */
+    --tcc-light-background: #F5F5F5; /* 淺灰背景 */
+    --tcc-dark-background: #222222;  /* 深色背景 (用於對比) */
+    --tcc-border-color: #DDDDDD; /* 邊框顏色 */
+  }
+  
+  /* 全局字體設定 - 使用清晰的無襯線字體 */
+  body, html, button, input, textarea, select {
+    font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+    color: var(--tcc-dark-text);
+  }
+  
+  /* --- 側邊欄 Sidebar --- */
+  
+  /* 側邊欄背景 */
+  /* 保持 Chainlit 預設或使用淺色背景 */
+  /* .sidebar { background-color: var(--tcc-light-background); } */
+  
+  /* 調整 Logo 大小 (您可以取消註解並調整數值) */
+  .sidebar img[alt="Logo"] {
+    max-width: 50px; /* 範例：最大寬度 150px */
+    height: auto;    /* 保持比例 */
+    margin-bottom: 1rem; /* Logo 下方增加一些間距 */
+  }
+  
+  /* 側邊欄標題/連結 */
+  .sidebar .MuiTypography-root, .sidebar .MuiButtonBase-root {
+    color: var(--tcc-dark-text);
+  }
+  
+  /* --- 主要聊天區域 --- */
+  
+  /* 聊天訊息 */
+  .message {
+    border: 1px solid var(--tcc-border-color);
+    border-radius: 8px; /* 輕微圓角 */
+    background-color: var(--tcc-background);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); /* 輕微陰影 */
+    margin-bottom: 1rem;
+  }
+  
+  /* 使用者訊息背景 (可選，稍微區分) */
+  .message.user-message {
+    background-color: var(--tcc-light-background);
+  }
+  
+  /* 助理訊息名稱 */
+  .message .message-author {
+    color: var(--tcc-primary-red); /* 使用 TCC 紅棕色 */
+    font-weight: bold;
+  }
+  
+  /* --- 按鈕 Buttons --- */
+  
+  /* 主要按鈕 */
+  button.MuiButton-containedPrimary {
+    background-color: var(--tcc-primary-red);
+    color: var(--tcc-light-text);
+    font-weight: bold;
+    border-radius: 4px;
+    text-transform: none; /* 移除大寫轉換 */
+  }
+  
+  button.MuiButton-containedPrimary:hover {
+    background-color: #8e3833; /* 滑鼠懸停時稍微加深 */
+  }
+  
+  /* 次要按鈕 */
+  button.MuiButton-outlined {
+    border-color: var(--tcc-primary-red);
+    color: var(--tcc-primary-red);
+  }
+  
+  /* --- 輸入框 Input --- */
+  .input-box, .input-box textarea {
+    border-radius: 4px;
+    border: 1px solid var(--tcc-border-color);
+  }
+  
+  /* 調整特定元素的顏色 (若有需要) */
+  /* 例如，修改歡迎畫面的標題顏色 */
+  #chainlit-initial-screen h1 {
+   color: var(--tcc-primary-red);
+  }
+  
+  /* --- 強調連結顏色 --- */
+  a {
+    color: var(--tcc-primary-red);
+  }
+  
+  a:hover {
+    color: #8e3833;
+  }
+  
+  /* --- 可選：深色模式調整 (如果啟用) --- */
+  /* body[data-theme="dark"] { */
+    /* --tcc-dark-text: #E0E0E0; */
+    /* --tcc-light-text: #121212; */
+    /* --tcc-background: #1E1E1E; */
+    /* --tcc-light-background: #2C2C2C; */
+    /* --tcc-dark-background: #F5F5F5; */
+    /* --tcc-border-color: #444444; */
+  /* } */
+  
+  /* body[data-theme="dark"] button.MuiButton-containedPrimary { */
+    /* color: var(--tcc-light-text); */
+  /* } */
+  
+  /* body[data-theme="dark"] .sidebar img[alt="Logo"] { */
+    /* 如果深色模式下 Logo 看不清，可以加個背景或濾鏡 */
+    /* background-color: rgba(255, 255, 255, 0.1); */
+    /* border-radius: 4px; */
+  /* } */
+  

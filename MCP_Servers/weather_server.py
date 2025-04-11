@@ -118,7 +118,6 @@ if __name__ == "__main__":
     from starlette.routing import Route, Mount
     from mcp.server.sse import SseServerTransport
 
-    # Start the server using uvicorn
     print(f"Starting Weather Server on port {args.port}")
 
     # Create SSE transport
