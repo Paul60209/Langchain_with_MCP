@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/paul60209-langchain-with-mcp-badge.png)](https://mseep.ai/app/paul60209-langchain-with-mcp)
+
 # Langchain with MCP Integrated Application
 
 ## 1. Project Scope
